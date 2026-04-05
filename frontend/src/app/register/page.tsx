@@ -1,23 +1,85 @@
+"use client";
+
+import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { register } from "@/lib/auth-api";
+import { setAccessToken } from "@/lib/auth-storage";
 
 export default function RegisterPage() {
+  const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const data = await register({ email, username, password });
+      setAccessToken(data.accessToken, data.expiresInMs);
+      router.replace("/dashboard");
+    } catch {
+      setError("Unable to register. Verify your details and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">
         Create your DevScribe account
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Module 1 scaffold: registration endpoint integration lands in Module 2.
+        Start publishing developer-first content in minutes.
       </p>
-      <div className="mt-8 rounded-xl border bg-card p-6 text-card-foreground">
-        <p className="text-sm text-muted-foreground">
-          Registration form is part of next module delivery.
-        </p>
-        <Button className="mt-4" disabled>
-          Create Account
+      <form
+        onSubmit={handleSubmit}
+        className="mt-8 rounded-xl border bg-card p-6 text-card-foreground"
+      >
+        <label className="mb-2 block text-sm">Email</label>
+        <input
+          type="email"
+          className="w-full rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
+
+        <label className="mb-2 mt-4 block text-sm">Username</label>
+        <input
+          type="text"
+          className="w-full rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          required
+          minLength={3}
+          maxLength={64}
+        />
+
+        <label className="mb-2 mt-4 block text-sm">Password</label>
+        <input
+          type="password"
+          className="w-full rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          minLength={8}
+        />
+
+        {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
+
+        <Button type="submit" className="mt-5 w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Creating account..." : "Create Account"}
         </Button>
-      </div>
+      </form>
       <p className="mt-4 text-sm text-muted-foreground">
         Already registered?{" "}
         <Link href="/login" className="underline">

@@ -21,9 +21,17 @@ This repository is implemented module-by-module. Each module is committed and pu
 - TanStack Query provider setup
 - Middleware-based protected route baseline
 
+### Module 2 (Current)
+
+- JWT authentication implemented end-to-end
+- Backend auth endpoints: register, login, me
+- Stateless Spring Security filter chain with JWT validation
+- BCrypt password hashing and user persistence
+- Frontend login/register pages connected to backend APIs
+- Token lifecycle handling with secure-cookie preference and localStorage fallback
+
 ### Upcoming Modules
 
-- Module 2: JWT authentication end-to-end (backend + frontend forms)
 - Module 3: Post CRUD, draft/publish flow, dashboard integration
 - Module 4: Tagging and filtering
 - Module 5: TipTap editor and markdown workflow
