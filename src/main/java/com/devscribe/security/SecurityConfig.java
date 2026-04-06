@@ -38,6 +38,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+                .requestMatchers(HttpMethod.GET, "/posts", "/posts/*").permitAll()
+                .requestMatchers(HttpMethod.POST, "/posts", "/posts/**").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/posts/**").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/posts/**").authenticated()
                 .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

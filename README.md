@@ -30,9 +30,17 @@ This repository is implemented module-by-module. Each module is committed and pu
 - Frontend login/register pages connected to backend APIs
 - Token lifecycle handling with secure-cookie preference and localStorage fallback
 
+### Module 3 (Current)
+
+- Backend post domain and status model implemented
+- Endpoints implemented: list, detail by slug, create, update, delete, publish
+- Owner-based authorization rules for post mutation actions
+- Public homepage published-feed endpoint usage
+- Dashboard post management UI with create, filter, publish, delete flows
+- Post detail page route wired to backend slug endpoint
+
 ### Upcoming Modules
 
-- Module 3: Post CRUD, draft/publish flow, dashboard integration
 - Module 4: Tagging and filtering
 - Module 5: TipTap editor and markdown workflow
 - Module 6: Fault-tolerant autosave system

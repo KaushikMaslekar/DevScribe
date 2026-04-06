@@ -3,13 +3,20 @@
 import Link from "next/link";
 import { ArrowRight, PenSquare } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { listPosts } from "@/lib/post-api";
 
 export default function Home() {
+  const publishedPostsQuery = useQuery({
+    queryKey: ["posts", "published"],
+    queryFn: () => listPosts({ page: 0, size: 6 }),
+  });
+
   return (
     <main className="relative flex flex-1 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(29,78,216,0.15),transparent_40%),radial-gradient(circle_at_80%_30%,rgba(251,146,60,0.2),transparent_35%)]" />
-      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-start justify-center px-6 py-20 md:px-10">
+      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-20 md:px-10">
         <motion.p
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -53,6 +60,45 @@ export default function Home() {
             <Link href="/login">Sign in</Link>
           </Button>
         </motion.div>
+
+        <div className="mt-14 w-full">
+          <h2 className="text-xl font-semibold">Latest Published Posts</h2>
+          {publishedPostsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Loading posts...
+            </p>
+          ) : null}
+          {publishedPostsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-500">
+              Unable to load posts right now.
+            </p>
+          ) : null}
+          {publishedPostsQuery.data ? (
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {publishedPostsQuery.data.content.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No published posts yet.
+                </p>
+              ) : (
+                publishedPostsQuery.data.content.map((post) => (
+                  <Link
+                    href={`/posts/${post.slug}`}
+                    key={post.id}
+                    className="rounded-xl border bg-card p-5 transition hover:border-primary/50"
+                  >
+                    <p className="text-xs tracking-wide text-muted-foreground">
+                      @{post.authorUsername}
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                      {post.excerpt ?? "No excerpt available."}
+                    </p>
+                  </Link>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
       </section>
     </main>
   );
