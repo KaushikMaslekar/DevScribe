@@ -7,6 +7,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { me } from "@/lib/auth-api";
 import {
+  addCollaborator,
+  getCollaborationSession,
+  listCollaborators,
+  removeCollaborator,
+} from "@/lib/collaboration-api";
+import {
   clearDraftSnapshot,
   readDraftSnapshot,
   useAutosaveDraft,
@@ -53,6 +59,7 @@ export default function DashboardPage() {
     () => initialSnapshot?.postId ?? null,
   );
   const [editorResetKey, setEditorResetKey] = useState(0);
+  const [collaboratorIdentifier, setCollaboratorIdentifier] = useState("");
 
   const normalizedTags = useMemo(
     () =>
@@ -77,6 +84,20 @@ export default function DashboardPage() {
         page: 0,
         size: 20,
       }),
+  });
+
+  const collaborationSessionQuery = useQuery({
+    queryKey: ["collaboration", "session", draftPostId],
+    queryFn: () => getCollaborationSession(draftPostId as number),
+    enabled: Boolean(draftPostId) && profileQuery.isSuccess,
+    retry: false,
+  });
+
+  const collaboratorsQuery = useQuery({
+    queryKey: ["collaboration", "collaborators", draftPostId],
+    queryFn: () => listCollaborators(draftPostId as number),
+    enabled: Boolean(draftPostId) && collaborationSessionQuery.isSuccess,
+    retry: false,
   });
 
   const createPostMutation = useMutation({
@@ -118,6 +139,27 @@ export default function DashboardPage() {
     },
   });
 
+  const addCollaboratorMutation = useMutation({
+    mutationFn: (identifier: string) =>
+      addCollaborator(draftPostId as number, { identifier }),
+    onSuccess: () => {
+      setCollaboratorIdentifier("");
+      queryClient.invalidateQueries({
+        queryKey: ["collaboration", "collaborators", draftPostId],
+      });
+    },
+  });
+
+  const removeCollaboratorMutation = useMutation({
+    mutationFn: (userId: number) =>
+      removeCollaborator(draftPostId as number, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["collaboration", "collaborators", draftPostId],
+      });
+    },
+  });
+
   const autosave = useAutosaveDraft({
     enabled: profileQuery.isSuccess,
     postId: draftPostId,
@@ -153,6 +195,7 @@ export default function DashboardPage() {
     setExcerpt("");
     setMarkdownContent("");
     setTagsInput("");
+    setCollaboratorIdentifier("");
     setEditorResetKey((value) => value + 1);
     clearDraftSnapshot();
   }
@@ -228,7 +271,103 @@ export default function DashboardPage() {
           key={editorResetKey}
           initialMarkdown={markdownContent}
           onMarkdownChange={setMarkdownContent}
+          collaborationSession={collaborationSessionQuery.data ?? null}
+          collaboratorName={profileQuery.data?.username}
         />
+        {draftPostId ? (
+          <div className="mt-6 rounded-lg border bg-muted/20 p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-medium">Collaborative editing</p>
+                <p className="text-xs text-muted-foreground">
+                  {collaborationSessionQuery.isLoading
+                    ? "Checking collaboration access..."
+                    : collaborationSessionQuery.isError
+                      ? "Collaboration is unavailable for this draft right now."
+                      : collaborationSessionQuery.data
+                        ? `${collaborationSessionQuery.data.role} access in room ${collaborationSessionQuery.data.room}`
+                        : "Save the draft to open a collaboration room."}
+                </p>
+              </div>
+              {collaborationSessionQuery.data?.degradedModeFallback ? (
+                <span className="rounded-full border px-2 py-1 text-xs text-amber-700">
+                  Fallback mode
+                </span>
+              ) : null}
+            </div>
+
+            {collaboratorsQuery.data ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Collaborators
+                </p>
+                {collaboratorsQuery.data.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No collaborators added yet.
+                  </p>
+                ) : (
+                  collaboratorsQuery.data.map((collaborator) => (
+                    <div
+                      key={collaborator.userId}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-medium">{collaborator.username}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {collaborator.email}
+                        </p>
+                      </div>
+                      {collaborationSessionQuery.data?.role === "OWNER" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            removeCollaboratorMutation.mutate(
+                              collaborator.userId,
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            {collaborationSessionQuery.data?.role === "OWNER" ? (
+              <form
+                className="mt-4 flex flex-wrap gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  if (!collaboratorIdentifier.trim()) {
+                    return;
+                  }
+
+                  addCollaboratorMutation.mutate(collaboratorIdentifier.trim());
+                }}
+              >
+                <input
+                  className="min-w-72 flex-1 rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
+                  value={collaboratorIdentifier}
+                  onChange={(event) =>
+                    setCollaboratorIdentifier(event.target.value)
+                  }
+                  placeholder="Invite by username or email"
+                />
+                <Button
+                  type="submit"
+                  disabled={addCollaboratorMutation.isPending}
+                >
+                  Invite
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
         <label className="mt-4 mb-2 block text-sm">
           Tags (comma separated)
         </label>

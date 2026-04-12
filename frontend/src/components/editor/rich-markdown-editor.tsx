@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import { common } from "lowlight";
+import { common, createLowlight } from "lowlight";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import * as Y from "yjs";
 import {
   Bold,
   Code,
@@ -20,17 +24,26 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAccessToken } from "@/lib/auth-storage";
+import { hasCollaborationTransport } from "@/lib/collaboration-session";
 import { cn } from "@/lib/utils";
 import { htmlToMarkdown, markdownToHtml } from "@/lib/markdown";
+import type { CollaborationSession } from "@/types/collaboration";
+
+const lowlight = createLowlight(common);
 
 interface RichMarkdownEditorProps {
   initialMarkdown?: string;
   onMarkdownChange: (markdown: string) => void;
+  collaborationSession?: CollaborationSession | null;
+  collaboratorName?: string;
 }
 
 export function RichMarkdownEditor({
   initialMarkdown = "",
   onMarkdownChange,
+  collaborationSession = null,
+  collaboratorName,
 }: RichMarkdownEditorProps) {
   const [markdown, setMarkdown] = useState(initialMarkdown);
 
@@ -39,8 +52,39 @@ export function RichMarkdownEditor({
     [initialMarkdown],
   );
 
-  const editor = useEditor({
-    extensions: [
+  const collaborationUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
+  const collaborationRoom = collaborationSession?.room ?? null;
+  const collaborationReady = Boolean(
+    collaborationSession?.canEdit &&
+    collaborationRoom &&
+    hasCollaborationTransport(),
+  );
+
+  const collaborationRuntime = useMemo(() => {
+    if (!collaborationReady) {
+      return null;
+    }
+
+    const document = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: collaborationUrl!,
+      name: collaborationRoom!,
+      document,
+      token: getAccessToken() ?? undefined,
+    });
+
+    return { document, provider };
+  }, [collaborationReady, collaborationRoom, collaborationUrl]);
+
+  useEffect(() => {
+    return () => {
+      collaborationRuntime?.provider.destroy();
+      collaborationRuntime?.document.destroy();
+    };
+  }, [collaborationRuntime]);
+
+  const editorExtensions = useMemo(
+    () => [
       StarterKit.configure({
         codeBlock: false,
       }),
@@ -53,9 +97,29 @@ export function RichMarkdownEditor({
         placeholder: "Write your story in rich text, then save it as markdown.",
       }),
       CodeBlockLowlight.configure({
-        lowlight: common,
+        lowlight,
       }),
+      ...(collaborationRuntime
+        ? [
+            Collaboration.configure({
+              document: collaborationRuntime.document,
+            }),
+            CollaborationCursor.configure({
+              provider: collaborationRuntime.provider,
+              user: {
+                name: collaboratorName ?? "Collaborator",
+                color: "#2563eb",
+              },
+            }),
+          ]
+        : []),
     ],
+    [collaborationRuntime, collaboratorName],
+  );
+
+  const editor = useEditor({
+    extensions: editorExtensions,
+    immediatelyRender: false,
     content: initialContent,
     editorProps: {
       attributes: {
@@ -86,6 +150,21 @@ export function RichMarkdownEditor({
 
   return (
     <div className="space-y-4">
+      {collaborationSession ? (
+        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              Collaboration room: {collaborationSession.room} · Role:{" "}
+              {collaborationSession.role}
+            </span>
+            <span>
+              {collaborationRuntime
+                ? "Live collaboration active"
+                : "Single-user fallback active"}
+            </span>
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2 rounded-lg border bg-muted/40 p-2">
         <ToolbarButton
           onClick={() =>
