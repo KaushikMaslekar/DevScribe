@@ -1,18 +1,40 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { getPostBySlug } from "@/lib/post-api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Heart } from "lucide-react";
+import { getPostBySlug, likePost, unlikePost } from "@/lib/post-api";
 import { markdownToHtml } from "@/lib/markdown";
+import { getAccessToken } from "@/lib/auth-storage";
+import { Button } from "@/components/ui/button";
 
 export default function PostDetailPage() {
   const params = useParams<{ slug: string }>();
+  const queryClient = useQueryClient();
 
   const postQuery = useQuery({
     queryKey: ["post", params.slug],
     queryFn: () => getPostBySlug(params.slug),
     enabled: Boolean(params.slug),
   });
+
+  const likeMutation = useMutation({
+    mutationFn: (id: number) => likePost(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["post", params.slug] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
+    },
+  });
+
+  const unlikeMutation = useMutation({
+    mutationFn: (id: number) => unlikePost(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["post", params.slug] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
+    },
+  });
+
+  const canLike = Boolean(getAccessToken());
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-14 md:px-10">
@@ -34,6 +56,40 @@ export default function PostDetailPage() {
               {postQuery.data.excerpt}
             </p>
           ) : null}
+
+          <div className="mt-4 flex items-center gap-3">
+            <Button
+              type="button"
+              variant={postQuery.data.likedByMe ? "default" : "outline"}
+              size="sm"
+              disabled={
+                !canLike || likeMutation.isPending || unlikeMutation.isPending
+              }
+              onClick={() => {
+                if (!canLike) {
+                  return;
+                }
+
+                if (postQuery.data.likedByMe) {
+                  unlikeMutation.mutate(postQuery.data.id);
+                } else {
+                  likeMutation.mutate(postQuery.data.id);
+                }
+              }}
+            >
+              <Heart className="mr-2 h-4 w-4" />
+              {postQuery.data.likedByMe ? "Unlike" : "Like"}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {postQuery.data.likesCount}{" "}
+              {postQuery.data.likesCount === 1 ? "like" : "likes"}
+            </span>
+            {!canLike ? (
+              <span className="text-xs text-muted-foreground">
+                Sign in to react
+              </span>
+            ) : null}
+          </div>
 
           {postQuery.data.tags.length > 0 ? (
             <div className="mt-4 flex flex-wrap gap-2">

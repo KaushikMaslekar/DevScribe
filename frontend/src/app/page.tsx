@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, PenSquare, Search } from "lucide-react";
+import { ArrowRight, Heart, PenSquare, Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -179,6 +179,10 @@ export default function Home() {
                     <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
                       {post.excerpt ?? "No excerpt available."}
                     </p>
+                    <div className="mt-3 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                      <Heart className="h-3 w-3" />
+                      {post.likesCount}
+                    </div>
                     {post.tags.length > 0 ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {post.tags.map((tag) => (

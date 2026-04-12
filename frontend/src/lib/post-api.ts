@@ -5,6 +5,7 @@ import type {
   CreatePostRequest,
   PageResponse,
   PostDetail,
+  PostLikeResponse,
   PostStatus,
   PostSummary,
   UpdatePostRequest,
@@ -59,6 +60,18 @@ export async function autosavePost(
   const { data } = await apiClient.post<AutosavePostResponse>(
     "/posts/autosave",
     payload,
+  );
+  return data;
+}
+
+export async function likePost(id: number): Promise<PostLikeResponse> {
+  const { data } = await apiClient.post<PostLikeResponse>(`/posts/${id}/like`);
+  return data;
+}
+
+export async function unlikePost(id: number): Promise<PostLikeResponse> {
+  const { data } = await apiClient.delete<PostLikeResponse>(
+    `/posts/${id}/like`,
   );
   return data;
 }

@@ -10,6 +10,8 @@ export interface PostSummary {
   status: PostStatus;
   publishedAt: string | null;
   updatedAt: string;
+  likesCount: number;
+  likedByMe: boolean;
 }
 
 export interface PostDetail {
@@ -24,6 +26,14 @@ export interface PostDetail {
   updatedAt: string;
   tags: string[];
   views: number;
+  likesCount: number;
+  likedByMe: boolean;
+}
+
+export interface PostLikeResponse {
+  postId: number;
+  likesCount: number;
+  likedByMe: boolean;
 }
 
 export interface PageResponse<T> {

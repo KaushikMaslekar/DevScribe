@@ -17,6 +17,7 @@ import com.devscribe.dto.post.AutosavePostRequest;
 import com.devscribe.dto.post.AutosavePostResponse;
 import com.devscribe.dto.post.CreatePostRequest;
 import com.devscribe.dto.post.PostDetailResponse;
+import com.devscribe.dto.post.PostLikeResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
 import com.devscribe.dto.post.UpdatePostTagsRequest;
@@ -85,5 +86,15 @@ public class PostController {
             @Valid @RequestBody UpdatePostTagsRequest request
     ) {
         return ResponseEntity.ok(postService.updateTags(id, request.tags()));
+    }
+
+    @PostMapping("/{id}/like")
+    public ResponseEntity<PostLikeResponse> like(@PathVariable @NonNull Long id) {
+        return ResponseEntity.ok(postService.like(id));
+    }
+
+    @DeleteMapping("/{id}/like")
+    public ResponseEntity<PostLikeResponse> unlike(@PathVariable @NonNull Long id) {
+        return ResponseEntity.ok(postService.unlike(id));
     }
 }

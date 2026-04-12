@@ -16,7 +16,9 @@ public record PostDetailResponse(
         OffsetDateTime publishedAt,
         OffsetDateTime updatedAt,
         List<String> tags,
-        long views
+        long views,
+        long likesCount,
+        boolean likedByMe
         ) {
 
 }

@@ -14,7 +14,9 @@ public record PostSummaryResponse(
         List<String> tags,
         PostStatus status,
         OffsetDateTime publishedAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        long likesCount,
+        boolean likedByMe
         ) {
 
 }

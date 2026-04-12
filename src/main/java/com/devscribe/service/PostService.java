@@ -2,7 +2,10 @@ package com.devscribe.service;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.cache.annotation.CacheEvict;
@@ -26,15 +29,18 @@ import com.devscribe.dto.post.AutosavePostRequest;
 import com.devscribe.dto.post.AutosavePostResponse;
 import com.devscribe.dto.post.CreatePostRequest;
 import com.devscribe.dto.post.PostDetailResponse;
+import com.devscribe.dto.post.PostLikeResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
 import com.devscribe.entity.Post;
+import com.devscribe.entity.PostLike;
 import com.devscribe.entity.PostStatus;
 import com.devscribe.entity.Tag;
 import com.devscribe.entity.User;
 import com.devscribe.realtime.PostRealtimeEvent;
 import com.devscribe.realtime.PostRealtimeEventType;
 import com.devscribe.realtime.PostRealtimePublisher;
+import com.devscribe.repository.PostLikeRepository;
 import com.devscribe.repository.PostRepository;
 import com.devscribe.repository.UserRepository;
 import com.devscribe.util.SlugUtil;
@@ -46,6 +52,7 @@ import lombok.RequiredArgsConstructor;
 public class PostService {
 
     private final PostRepository postRepository;
+    private final PostLikeRepository postLikeRepository;
     private final UserRepository userRepository;
     private final TagService tagService;
     private final PostRealtimePublisher postRealtimePublisher;
@@ -96,7 +103,10 @@ public class PostService {
             postPage = postRepository.findByStatusOrderByPublishedAtDesc(PostStatus.PUBLISHED, pageable);
         }
 
-        return postPage.map(this::toSummary);
+        Map<Long, Long> likesByPostId = resolveLikesByPostId(postPage.getContent());
+        Set<Long> likedPostIds = resolveLikedPostIds(postPage.getContent());
+
+        return postPage.map(post -> toSummary(post, likesByPostId, likedPostIds));
     }
 
     @Transactional(readOnly = true)
@@ -105,7 +115,41 @@ public class PostService {
         Post post = postRepository.findBySlugAndStatus(slug, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
 
-        return toDetail(post);
+        long likesCount = postLikeRepository.countByPost_Id(post.getId());
+        boolean likedByMe = isLikedByCurrentUser(post.getId());
+        return toDetail(post, likesCount, likedByMe);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
+    public PostLikeResponse like(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only published posts can be liked");
+        }
+
+        User currentUser = getCurrentUser();
+        if (!postLikeRepository.existsByPost_IdAndUser_Id(postId, currentUser.getId())) {
+            postLikeRepository.save(PostLike.builder().post(post).user(currentUser).build());
+        }
+
+        return new PostLikeResponse(postId, postLikeRepository.countByPost_Id(postId), true);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
+    public PostLikeResponse unlike(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only published posts can be unliked");
+        }
+
+        User currentUser = getCurrentUser();
+        postLikeRepository.deleteByPostIdAndUserId(postId, currentUser.getId());
+
+        return new PostLikeResponse(postId, postLikeRepository.countByPost_Id(postId), false);
     }
 
     @Transactional
@@ -126,7 +170,7 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.CREATED));
-        return toDetail(saved);
+        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
     }
 
     @Transactional
@@ -223,7 +267,7 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
-        return toDetail(saved);
+        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
     }
 
     @Transactional
@@ -236,7 +280,7 @@ public class PostService {
         post.setTags(resolveTags(tags));
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
-        return toDetail(saved);
+        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
     }
 
     @Transactional
@@ -264,7 +308,7 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.PUBLISHED));
-        return toDetail(saved);
+        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
     }
 
     private void ensureOwnership(Post post) {
@@ -319,7 +363,7 @@ public class PostService {
         return markdownContent;
     }
 
-    private PostSummaryResponse toSummary(Post post) {
+    private PostSummaryResponse toSummary(Post post, Map<Long, Long> likesByPostId, Set<Long> likedPostIds) {
         return new PostSummaryResponse(
                 post.getId(),
                 post.getSlug(),
@@ -329,11 +373,13 @@ public class PostService {
                 toTagSlugs(post),
                 post.getStatus(),
                 post.getPublishedAt(),
-                post.getUpdatedAt()
+                post.getUpdatedAt(),
+                likesByPostId.getOrDefault(post.getId(), 0L),
+                likedPostIds.contains(post.getId())
         );
     }
 
-    private PostDetailResponse toDetail(Post post) {
+    private PostDetailResponse toDetail(Post post, long likesCount, boolean likedByMe) {
         return new PostDetailResponse(
                 post.getId(),
                 post.getSlug(),
@@ -345,8 +391,51 @@ public class PostService {
                 post.getPublishedAt(),
                 post.getUpdatedAt(),
                 toTagSlugs(post),
-                0
+                0,
+                likesCount,
+                likedByMe
         );
+    }
+
+    private Map<Long, Long> resolveLikesByPostId(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> postIds = posts.stream().map(Post::getId).toList();
+        Map<Long, Long> likesByPostId = new HashMap<>();
+        for (PostLikeRepository.PostLikeCountProjection projection : postLikeRepository.countLikesByPostIds(postIds)) {
+            likesByPostId.put(projection.getPostId(), projection.getLikeCount());
+        }
+        return likesByPostId;
+    }
+
+    private Set<Long> resolveLikedPostIds(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return Set.of();
+        }
+
+        User currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            return Set.of();
+        }
+
+        List<Long> postIds = posts.stream().map(Post::getId).toList();
+        return new HashSet<>(postLikeRepository.findLikedPostIdsByUserIdAndPostIds(currentUser.getId(), postIds));
+    }
+
+    private boolean isLikedByCurrentUser(Long postId) {
+        User currentUser = getCurrentUserOrNull();
+        return currentUser != null && postLikeRepository.existsByPost_IdAndUser_Id(postId, currentUser.getId());
+    }
+
+    private User getCurrentUserOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            return null;
+        }
+
+        return userRepository.findByEmail(authentication.getName()).orElse(null);
     }
 
     private Set<Tag> resolveTags(List<String> tags) {

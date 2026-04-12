@@ -22,6 +22,7 @@ import com.devscribe.entity.Post;
 import com.devscribe.entity.PostStatus;
 import com.devscribe.entity.User;
 import com.devscribe.realtime.PostRealtimePublisher;
+import com.devscribe.repository.PostLikeRepository;
 import com.devscribe.repository.PostRepository;
 import com.devscribe.repository.UserRepository;
 
@@ -36,6 +37,9 @@ class PostServiceOwnershipTest {
 
     @Mock
     private TagService tagService;
+
+    @Mock
+    private PostLikeRepository postLikeRepository;
 
     @Mock
     private PostRealtimePublisher postRealtimePublisher;
