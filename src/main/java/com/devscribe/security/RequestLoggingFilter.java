@@ -3,12 +3,15 @@ package com.devscribe.security;
 import java.io.IOException;
 import java.time.Instant;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import com.devscribe.util.StructuredLogger;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +28,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     // Exclude health/metrics endpoints from verbose logging
     private static final String[] EXCLUDED_PATHS = {"/health", "/metrics", "/actuator"};
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -116,6 +122,16 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             if (contentLength > 0) {
                 log.warn("Error response body size: {} bytes", contentLength);
             }
+        }
+
+        if (meterRegistry != null) {
+            Timer.builder("http.server.requests.custom")
+                    .description("Custom HTTP request duration")
+                    .tag("method", method)
+                    .tag("path", path)
+                    .tag("status", Integer.toString(status))
+                    .register(meterRegistry)
+                    .record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
         }
     }
 

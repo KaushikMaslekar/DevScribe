@@ -4,13 +4,11 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.devscribe.repository.PostRepository;
 import com.devscribe.util.CorrelationIdUtil;
 import com.devscribe.util.StructuredLogger;
 
@@ -29,9 +27,6 @@ public class HealthCheckController {
 
     @PersistenceContext
     private EntityManager entityManager;
-
-    @Autowired(required = false)
-    private PostRepository postRepository;
 
     /**
      * Simple alive check - returns 200 if server is running. Used by load
