@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,21 @@ import { me } from "@/lib/auth-api";
 import { clearAccessToken } from "@/lib/auth-storage";
 import { createPost, deletePost, listPosts, publishPost } from "@/lib/post-api";
 import type { PostStatus } from "@/types/post";
+
+const RichMarkdownEditor = dynamic(
+  () =>
+    import("@/components/editor/rich-markdown-editor").then(
+      (module) => module.RichMarkdownEditor,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-96 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+        Loading editor...
+      </div>
+    ),
+  },
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,6 +33,7 @@ export default function DashboardPage() {
   const [excerpt, setExcerpt] = useState("");
   const [markdownContent, setMarkdownContent] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [editorResetKey, setEditorResetKey] = useState(0);
 
   const profileQuery = useQuery({
     queryKey: ["auth", "me"],
@@ -41,6 +58,7 @@ export default function DashboardPage() {
       setExcerpt("");
       setMarkdownContent("");
       setTagsInput("");
+      setEditorResetKey((value) => value + 1);
       queryClient.invalidateQueries({ queryKey: ["posts", "mine"] });
       queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
     },
@@ -133,11 +151,10 @@ export default function DashboardPage() {
           onChange={(event) => setExcerpt(event.target.value)}
         />
         <label className="mt-4 mb-2 block text-sm">Markdown Content</label>
-        <textarea
-          className="min-h-48 w-full rounded-md border bg-background px-3 py-2 font-mono text-sm outline-none ring-ring/40 focus:ring-2"
-          value={markdownContent}
-          onChange={(event) => setMarkdownContent(event.target.value)}
-          required
+        <RichMarkdownEditor
+          key={editorResetKey}
+          initialMarkdown={markdownContent}
+          onMarkdownChange={setMarkdownContent}
         />
         <label className="mt-4 mb-2 block text-sm">
           Tags (comma separated)

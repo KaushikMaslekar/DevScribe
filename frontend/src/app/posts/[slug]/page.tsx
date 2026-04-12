@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getPostBySlug } from "@/lib/post-api";
+import { markdownToHtml } from "@/lib/markdown";
 
 export default function PostDetailPage() {
   const params = useParams<{ slug: string }>();
@@ -48,9 +49,12 @@ export default function PostDetailPage() {
           ) : null}
 
           <div className="mt-8 rounded-xl border bg-card p-6">
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-7">
-              {postQuery.data.markdownContent}
-            </pre>
+            <div
+              className="prose prose-slate max-w-none prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100"
+              dangerouslySetInnerHTML={{
+                __html: markdownToHtml(postQuery.data.markdownContent),
+              }}
+            />
           </div>
         </article>
       ) : null}
