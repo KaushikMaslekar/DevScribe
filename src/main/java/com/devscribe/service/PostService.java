@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.devscribe.config.CachingConfig;
 import com.devscribe.dto.post.AutosavePostRequest;
 import com.devscribe.dto.post.AutosavePostResponse;
 import com.devscribe.dto.post.CreatePostRequest;
@@ -97,6 +100,7 @@ public class PostService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CachingConfig.CACHE_POST_BY_SLUG, key = "#slug")
     public PostDetailResponse getBySlug(String slug) {
         Post post = postRepository.findBySlugAndStatus(slug, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
@@ -203,6 +207,7 @@ public class PostService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
     public PostDetailResponse update(@NonNull Long id, UpdatePostRequest request) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
@@ -222,6 +227,7 @@ public class PostService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
     public PostDetailResponse updateTags(@NonNull Long id, List<String> tags) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
@@ -234,6 +240,7 @@ public class PostService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
     public void delete(@NonNull Long id) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
@@ -244,6 +251,7 @@ public class PostService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
     public PostDetailResponse publish(@NonNull Long id) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
