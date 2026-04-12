@@ -1,0 +1,2 @@
+ALTER TABLE posts
+    ADD COLUMN IF NOT EXISTS autosave_revision BIGINT NOT NULL DEFAULT 0;

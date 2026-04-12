@@ -1,5 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 import type {
+  AutosavePostRequest,
+  AutosavePostResponse,
   CreatePostRequest,
   PageResponse,
   PostDetail,
@@ -47,5 +49,15 @@ export async function deletePost(id: number): Promise<void> {
 
 export async function publishPost(id: number): Promise<PostDetail> {
   const { data } = await apiClient.post<PostDetail>(`/posts/${id}/publish`);
+  return data;
+}
+
+export async function autosavePost(
+  payload: AutosavePostRequest,
+): Promise<AutosavePostResponse> {
+  const { data } = await apiClient.post<AutosavePostResponse>(
+    "/posts/autosave",
+    payload,
+  );
   return data;
 }

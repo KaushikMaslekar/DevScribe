@@ -1,13 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { me } from "@/lib/auth-api";
+import {
+  clearDraftSnapshot,
+  readDraftSnapshot,
+  useAutosaveDraft,
+} from "@/lib/autosave";
 import { clearAccessToken } from "@/lib/auth-storage";
-import { createPost, deletePost, listPosts, publishPost } from "@/lib/post-api";
+import {
+  createPost,
+  deletePost,
+  listPosts,
+  publishPost,
+  updatePost,
+} from "@/lib/post-api";
 import type { PostStatus } from "@/types/post";
 
 const RichMarkdownEditor = dynamic(
@@ -28,12 +39,29 @@ const RichMarkdownEditor = dynamic(
 export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const initialSnapshot = useMemo(() => readDraftSnapshot(), []);
   const [statusFilter, setStatusFilter] = useState<PostStatus | "ALL">("ALL");
-  const [title, setTitle] = useState("");
-  const [excerpt, setExcerpt] = useState("");
-  const [markdownContent, setMarkdownContent] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
+  const [title, setTitle] = useState(() => initialSnapshot?.title ?? "");
+  const [excerpt, setExcerpt] = useState(() => initialSnapshot?.excerpt ?? "");
+  const [markdownContent, setMarkdownContent] = useState(
+    () => initialSnapshot?.markdownContent ?? "",
+  );
+  const [tagsInput, setTagsInput] = useState(
+    () => initialSnapshot?.tagsInput ?? "",
+  );
+  const [draftPostId, setDraftPostId] = useState<number | null>(
+    () => initialSnapshot?.postId ?? null,
+  );
   const [editorResetKey, setEditorResetKey] = useState(0);
+
+  const normalizedTags = useMemo(
+    () =>
+      tagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    [tagsInput],
+  );
 
   const profileQuery = useQuery({
     queryKey: ["auth", "me"],
@@ -53,12 +81,22 @@ export default function DashboardPage() {
 
   const createPostMutation = useMutation({
     mutationFn: createPost,
+    onSuccess: (post) => {
+      setDraftPostId(post.id);
+      queryClient.invalidateQueries({ queryKey: ["posts", "mine"] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
+    },
+  });
+
+  const updatePostMutation = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: Parameters<typeof updatePost>[1];
+    }) => updatePost(id, payload),
     onSuccess: () => {
-      setTitle("");
-      setExcerpt("");
-      setMarkdownContent("");
-      setTagsInput("");
-      setEditorResetKey((value) => value + 1);
       queryClient.invalidateQueries({ queryKey: ["posts", "mine"] });
       queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
     },
@@ -80,17 +118,43 @@ export default function DashboardPage() {
     },
   });
 
+  const autosave = useAutosaveDraft({
+    enabled: profileQuery.isSuccess,
+    postId: draftPostId,
+    onPostIdChange: setDraftPostId,
+    initialRevision: initialSnapshot?.revision ?? 0,
+    title,
+    excerpt,
+    markdownContent,
+    tagsInput,
+  });
+
   function handleCreatePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    createPostMutation.mutate({
+
+    const payload = {
       title,
       excerpt: excerpt || undefined,
       markdownContent,
-      tags: tagsInput
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-    });
+      tags: normalizedTags,
+    };
+
+    if (draftPostId) {
+      updatePostMutation.mutate({ id: draftPostId, payload });
+      return;
+    }
+
+    createPostMutation.mutate(payload);
+  }
+
+  function handleStartNewDraft() {
+    setDraftPostId(null);
+    setTitle("");
+    setExcerpt("");
+    setMarkdownContent("");
+    setTagsInput("");
+    setEditorResetKey((value) => value + 1);
+    clearDraftSnapshot();
   }
 
   function handleLogout() {
@@ -137,6 +201,15 @@ export default function DashboardPage() {
         className="mt-8 rounded-xl border bg-card p-6 text-card-foreground"
       >
         <h2 className="text-xl font-semibold">Create New Post</h2>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            Autosave status: {autosave.saveState}
+            {autosave.lastSavedAt
+              ? ` · ${new Date(autosave.lastSavedAt).toLocaleTimeString()}`
+              : ""}
+          </span>
+          <span>{draftPostId ? `Draft ID: ${draftPostId}` : "New draft"}</span>
+        </div>
         <label className="mt-4 mb-2 block text-sm">Title</label>
         <input
           className="w-full rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
@@ -168,9 +241,21 @@ export default function DashboardPage() {
         <Button
           className="mt-4"
           type="submit"
-          disabled={createPostMutation.isPending}
+          disabled={
+            createPostMutation.isPending || updatePostMutation.isPending
+          }
         >
-          {createPostMutation.isPending ? "Creating..." : "Create Draft"}
+          {createPostMutation.isPending || updatePostMutation.isPending
+            ? "Saving..."
+            : "Save Draft"}
+        </Button>
+        <Button
+          className="mt-4 ml-3"
+          type="button"
+          variant="outline"
+          onClick={handleStartNewDraft}
+        >
+          Start New Draft
         </Button>
       </form>
 

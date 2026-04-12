@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.devscribe.dto.post.AutosavePostRequest;
+import com.devscribe.dto.post.AutosavePostResponse;
 import com.devscribe.dto.post.CreatePostRequest;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
@@ -110,6 +112,81 @@ public class PostService {
     }
 
     @Transactional
+    public AutosavePostResponse autosave(AutosavePostRequest request) {
+        User currentUser = getCurrentUser();
+
+        long incomingRevision = request.clientRevision();
+        if (incomingRevision < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "clientRevision must be >= 0");
+        }
+
+        if (request.postId() == null) {
+            String title = normalizeAutosaveTitle(request.title());
+
+            Post post = Post.builder()
+                    .author(currentUser)
+                    .slug(createUniqueSlug(title))
+                    .title(title)
+                    .excerpt(request.excerpt())
+                    .markdownContent(normalizeAutosaveMarkdown(request.markdownContent()))
+                    .status(PostStatus.DRAFT)
+                    .autosaveRevision(incomingRevision)
+                    .build();
+
+            post.setTags(resolveTags(request.tags()));
+            Post saved = postRepository.save(post);
+            return new AutosavePostResponse(
+                    saved.getId(),
+                    saved.getSlug(),
+                    saved.getAutosaveRevision(),
+                    true,
+                    saved.getUpdatedAt()
+            );
+        }
+
+        Long postId = request.postId();
+        if (postId == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "postId is required for updating an existing draft");
+        }
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        ensureOwnership(post);
+
+        Long autosaveRevision = post.getAutosaveRevision();
+        long currentRevision = autosaveRevision != null ? autosaveRevision : 0L;
+        if (incomingRevision <= currentRevision) {
+            return new AutosavePostResponse(
+                    post.getId(),
+                    post.getSlug(),
+                    currentRevision,
+                    false,
+                    post.getUpdatedAt()
+            );
+        }
+
+        String nextTitle = normalizeAutosaveTitle(request.title());
+        if (!post.getTitle().equals(nextTitle)) {
+            post.setTitle(nextTitle);
+            post.setSlug(createUniqueSlug(nextTitle, post.getId()));
+        }
+
+        post.setExcerpt(request.excerpt());
+        post.setMarkdownContent(normalizeAutosaveMarkdown(request.markdownContent()));
+        post.setTags(resolveTags(request.tags()));
+        post.setAutosaveRevision(incomingRevision);
+
+        Post saved = postRepository.save(post);
+        return new AutosavePostResponse(
+                saved.getId(),
+                saved.getSlug(),
+                saved.getAutosaveRevision(),
+                true,
+                saved.getUpdatedAt()
+        );
+    }
+
+    @Transactional
     public PostDetailResponse update(@NonNull Long id, UpdatePostRequest request) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
@@ -195,6 +272,20 @@ public class PostService {
             suffix += 1;
             slug = baseSlug + "-" + suffix;
         }
+    }
+
+    private String normalizeAutosaveTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return "Untitled draft";
+        }
+        return title.trim();
+    }
+
+    private String normalizeAutosaveMarkdown(String markdownContent) {
+        if (markdownContent == null) {
+            return "";
+        }
+        return markdownContent;
     }
 
     private PostSummaryResponse toSummary(Post post) {

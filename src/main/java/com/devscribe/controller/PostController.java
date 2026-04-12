@@ -2,6 +2,7 @@ package com.devscribe.controller;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.devscribe.dto.post.AutosavePostRequest;
+import com.devscribe.dto.post.AutosavePostResponse;
 import com.devscribe.dto.post.CreatePostRequest;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
@@ -51,28 +54,33 @@ public class PostController {
         return ResponseEntity.ok(postService.create(request));
     }
 
+    @PostMapping("/autosave")
+    public ResponseEntity<AutosavePostResponse> autosave(@Valid @RequestBody AutosavePostRequest request) {
+        return ResponseEntity.ok(postService.autosave(request));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<PostDetailResponse> update(
-            @PathVariable Long id,
+            @PathVariable @NonNull Long id,
             @Valid @RequestBody UpdatePostRequest request
     ) {
         return ResponseEntity.ok(postService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable @NonNull Long id) {
         postService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/publish")
-    public ResponseEntity<PostDetailResponse> publish(@PathVariable Long id) {
+    public ResponseEntity<PostDetailResponse> publish(@PathVariable @NonNull Long id) {
         return ResponseEntity.ok(postService.publish(id));
     }
 
     @PutMapping("/{id}/tags")
     public ResponseEntity<PostDetailResponse> updateTags(
-            @PathVariable Long id,
+            @PathVariable @NonNull Long id,
             @Valid @RequestBody UpdatePostTagsRequest request
     ) {
         return ResponseEntity.ok(postService.updateTags(id, request.tags()));

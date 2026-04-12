@@ -46,6 +46,10 @@ public class Post {
     @Column(nullable = false)
     private Long version;
 
+    @Builder.Default
+    @Column(name = "autosave_revision", nullable = false)
+    private Long autosaveRevision = 0L;
+
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
 

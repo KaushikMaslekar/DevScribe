@@ -48,3 +48,28 @@ export interface UpdatePostRequest {
   markdownContent: string;
   tags?: string[];
 }
+
+export interface AutosavePostRequest {
+  postId?: number;
+  clientRevision: number;
+  title?: string;
+  excerpt?: string;
+  markdownContent?: string;
+  tags?: string[];
+}
+
+export interface AutosavePostResponse {
+  postId: number;
+  slug: string;
+  autosaveRevision: number;
+  accepted: boolean;
+  savedAt: string;
+}
+
+export type AutosaveState =
+  | "idle"
+  | "saving"
+  | "saved"
+  | "retrying"
+  | "offline"
+  | "error";
