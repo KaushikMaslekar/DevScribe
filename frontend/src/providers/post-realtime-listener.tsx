@@ -6,6 +6,7 @@ import {
   subscribeToPostRealtime,
   type PostRealtimeEvent,
 } from "@/lib/post-realtime";
+import type { PageResponse, PostDetail, PostSummary } from "@/types/post";
 
 const REALTIME_REFRESH_DEBOUNCE_MS = 400;
 
@@ -16,6 +17,88 @@ export function PostRealtimeListener() {
 
   useEffect(() => {
     const pendingSlugs = pendingSlugsRef.current;
+
+    const applyOptimisticPatch = (event: PostRealtimeEvent) => {
+      queryClient.setQueriesData<PageResponse<PostSummary>>(
+        { queryKey: ["posts"] },
+        (current) => {
+          if (!current) {
+            return current;
+          }
+
+          if (event.eventType === "DELETED") {
+            const nextContent = current.content.filter(
+              (post) => post.id !== event.postId,
+            );
+
+            if (nextContent.length === current.content.length) {
+              return current;
+            }
+
+            return {
+              ...current,
+              content: nextContent,
+              totalElements: Math.max(0, current.totalElements - 1),
+            };
+          }
+
+          let changed = false;
+          const nextContent = current.content.map((post) => {
+            if (post.id !== event.postId) {
+              return post;
+            }
+
+            changed = true;
+
+            return {
+              ...post,
+              slug: event.slug,
+              status: event.status,
+              updatedAt: event.occurredAt,
+              publishedAt:
+                event.eventType === "PUBLISHED"
+                  ? event.occurredAt
+                  : post.publishedAt,
+            };
+          });
+
+          if (!changed) {
+            return current;
+          }
+
+          return {
+            ...current,
+            content: nextContent,
+          };
+        },
+      );
+
+      if (event.eventType === "DELETED") {
+        queryClient.removeQueries({ queryKey: ["post", event.slug] });
+        return;
+      }
+
+      queryClient.setQueriesData<PostDetail>({ queryKey: ["post"] }, (post) => {
+        if (!post) {
+          return post;
+        }
+
+        if (post.id !== event.postId && post.slug !== event.slug) {
+          return post;
+        }
+
+        return {
+          ...post,
+          slug: event.slug,
+          status: event.status,
+          updatedAt: event.occurredAt,
+          publishedAt:
+            event.eventType === "PUBLISHED"
+              ? event.occurredAt
+              : post.publishedAt,
+        };
+      });
+    };
 
     const flushInvalidations = () => {
       timerRef.current = null;
@@ -30,6 +113,8 @@ export function PostRealtimeListener() {
     };
 
     const scheduleInvalidation = (event: PostRealtimeEvent) => {
+      applyOptimisticPatch(event);
+
       if (event.slug) {
         pendingSlugs.add(event.slug);
       }
