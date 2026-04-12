@@ -1,16 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight, PenSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { listPosts } from "@/lib/post-api";
+import { listTags } from "@/lib/tag-api";
 
 export default function Home() {
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
+  const tagsQuery = useQuery({
+    queryKey: ["tags"],
+    queryFn: listTags,
+  });
+
   const publishedPostsQuery = useQuery({
-    queryKey: ["posts", "published"],
-    queryFn: () => listPosts({ page: 0, size: 6 }),
+    queryKey: ["posts", "published", activeTag],
+    queryFn: () => listPosts({ page: 0, size: 6, tag: activeTag ?? undefined }),
   });
 
   return (
@@ -62,7 +71,36 @@ export default function Home() {
         </motion.div>
 
         <div className="mt-14 w-full">
-          <h2 className="text-xl font-semibold">Latest Published Posts</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Latest Published Posts</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTag(null)}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  activeTag === null
+                    ? "border-primary text-primary"
+                    : "text-muted-foreground"
+                }`}
+              >
+                All
+              </button>
+              {tagsQuery.data?.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setActiveTag(tag)}
+                  className={`rounded-full border px-3 py-1 text-xs ${
+                    activeTag === tag
+                      ? "border-primary text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </div>
           {publishedPostsQuery.isLoading ? (
             <p className="mt-3 text-sm text-muted-foreground">
               Loading posts...
@@ -93,6 +131,18 @@ export default function Home() {
                     <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
                       {post.excerpt ?? "No excerpt available."}
                     </p>
+                    {post.tags.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {post.tags.map((tag) => (
+                          <span
+                            key={`${post.id}-${tag}`}
+                            className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </Link>
                 ))
               )}

@@ -6,6 +6,7 @@ export interface PostSummary {
   title: string;
   excerpt: string | null;
   authorUsername: string;
+  tags: string[];
   status: PostStatus;
   publishedAt: string | null;
   updatedAt: string;
@@ -38,10 +39,12 @@ export interface CreatePostRequest {
   title: string;
   excerpt?: string;
   markdownContent: string;
+  tags?: string[];
 }
 
 export interface UpdatePostRequest {
   title: string;
   excerpt?: string;
   markdownContent: string;
+  tags?: string[];
 }

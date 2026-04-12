@@ -13,6 +13,7 @@ export async function listPosts(params?: {
   size?: number;
   mine?: boolean;
   status?: PostStatus;
+  tag?: string;
 }): Promise<PageResponse<PostSummary>> {
   const { data } = await apiClient.get<PageResponse<PostSummary>>("/posts", {
     params,

@@ -16,6 +16,7 @@ import com.devscribe.dto.post.CreatePostRequest;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
+import com.devscribe.dto.post.UpdatePostTagsRequest;
 import com.devscribe.entity.PostStatus;
 import com.devscribe.service.PostService;
 
@@ -34,9 +35,10 @@ public class PostController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "false") boolean mine,
-            @RequestParam(required = false) PostStatus status
+            @RequestParam(required = false) PostStatus status,
+            @RequestParam(required = false) String tag
     ) {
-        return ResponseEntity.ok(postService.getPosts(page, size, mine, status));
+        return ResponseEntity.ok(postService.getPosts(page, size, mine, status, tag));
     }
 
     @GetMapping("/{slug}")
@@ -66,5 +68,13 @@ public class PostController {
     @PostMapping("/{id}/publish")
     public ResponseEntity<PostDetailResponse> publish(@PathVariable Long id) {
         return ResponseEntity.ok(postService.publish(id));
+    }
+
+    @PutMapping("/{id}/tags")
+    public ResponseEntity<PostDetailResponse> updateTags(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdatePostTagsRequest request
+    ) {
+        return ResponseEntity.ok(postService.updateTags(id, request.tags()));
     }
 }

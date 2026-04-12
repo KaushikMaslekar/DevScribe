@@ -34,6 +34,19 @@ export default function PostDetailPage() {
             </p>
           ) : null}
 
+          {postQuery.data.tags.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {postQuery.data.tags.map((tag) => (
+                <span
+                  key={`${postQuery.data.id}-${tag}`}
+                  className="rounded-full border px-2 py-1 text-xs text-muted-foreground"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="mt-8 rounded-xl border bg-card p-6">
             <pre className="whitespace-pre-wrap font-mono text-sm leading-7">
               {postQuery.data.markdownContent}

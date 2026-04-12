@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
   const [markdownContent, setMarkdownContent] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
 
   const profileQuery = useQuery({
     queryKey: ["auth", "me"],
@@ -39,6 +40,7 @@ export default function DashboardPage() {
       setTitle("");
       setExcerpt("");
       setMarkdownContent("");
+      setTagsInput("");
       queryClient.invalidateQueries({ queryKey: ["posts", "mine"] });
       queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
     },
@@ -66,6 +68,10 @@ export default function DashboardPage() {
       title,
       excerpt: excerpt || undefined,
       markdownContent,
+      tags: tagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
     });
   }
 
@@ -133,6 +139,15 @@ export default function DashboardPage() {
           onChange={(event) => setMarkdownContent(event.target.value)}
           required
         />
+        <label className="mt-4 mb-2 block text-sm">
+          Tags (comma separated)
+        </label>
+        <input
+          className="w-full rounded-md border bg-background px-3 py-2 outline-none ring-ring/40 focus:ring-2"
+          value={tagsInput}
+          onChange={(event) => setTagsInput(event.target.value)}
+          placeholder="spring-boot, java, backend"
+        />
         <Button
           className="mt-4"
           type="submit"
@@ -176,6 +191,18 @@ export default function DashboardPage() {
                   <p className="mt-2 text-sm text-muted-foreground">
                     {post.excerpt ?? "No excerpt"}
                   </p>
+                  {post.tags.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {post.tags.map((tag) => (
+                        <span
+                          key={`${post.id}-${tag}`}
+                          className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       variant="outline"
