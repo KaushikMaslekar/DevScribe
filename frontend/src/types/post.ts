@@ -1,5 +1,11 @@
 export type PostStatus = "DRAFT" | "PUBLISHED";
 
+export interface PostTocItem {
+  anchor: string;
+  title: string;
+  level: number;
+}
+
 export interface PostSummary {
   id: number;
   slug: string;
@@ -14,6 +20,7 @@ export interface PostSummary {
   publishedAt: string | null;
   scheduledPublishAt: string | null;
   updatedAt: string;
+  readingTimeMinutes: number;
   likesCount: number;
   likedByMe: boolean;
   bookmarkedByMe: boolean;
@@ -35,6 +42,8 @@ export interface PostDetail {
   scheduledPublishAt: string | null;
   updatedAt: string;
   tags: string[];
+  readingTimeMinutes: number;
+  tableOfContents: PostTocItem[];
   views: number;
   likesCount: number;
   likedByMe: boolean;

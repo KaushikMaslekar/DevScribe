@@ -4,9 +4,12 @@ import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -36,6 +39,7 @@ import com.devscribe.dto.post.PostBookmarkResponse;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostLikeResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
+import com.devscribe.dto.post.PostTocItemResponse;
 import com.devscribe.dto.post.RestoreAutosaveResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
 import com.devscribe.entity.Post;
@@ -65,6 +69,8 @@ import lombok.RequiredArgsConstructor;
 public class PostService {
 
     private static final int MAX_AUTOSAVE_SNAPSHOTS = 50;
+    private static final int READING_WORDS_PER_MINUTE = 200;
+    private static final Pattern MARKDOWN_TOKEN_PATTERN = Pattern.compile("[`*_>#\\-]+|\\[[^]]*]\\([^)]*\\)");
 
     private final PostRepository postRepository;
     private final PostSeriesRepository postSeriesRepository;
@@ -680,6 +686,7 @@ public class PostService {
                 post.getPublishedAt(),
                 post.getScheduledPublishAt(),
                 post.getUpdatedAt(),
+                estimateReadingTimeMinutes(post.getMarkdownContent()),
                 likesByPostId.getOrDefault(post.getId(), 0L),
                 likedPostIds.contains(post.getId()),
                 bookmarkedPostIds.contains(post.getId()),
@@ -709,12 +716,61 @@ public class PostService {
                 post.getScheduledPublishAt(),
                 post.getUpdatedAt(),
                 toTagSlugs(post),
+                estimateReadingTimeMinutes(post.getMarkdownContent()),
+                extractTableOfContents(post.getMarkdownContent()),
                 0,
                 likesCount,
                 likedByMe,
                 bookmarkedByMe,
                 authorFollowedByMe
         );
+    }
+
+    private int estimateReadingTimeMinutes(String markdownContent) {
+        if (markdownContent == null || markdownContent.isBlank()) {
+            return 1;
+        }
+
+        String plain = MARKDOWN_TOKEN_PATTERN.matcher(markdownContent).replaceAll(" ");
+        int words = plain.trim().isEmpty() ? 0 : plain.trim().split("\\s+").length;
+        return Math.max(1, (int) Math.ceil(words / (double) READING_WORDS_PER_MINUTE));
+    }
+
+    private List<PostTocItemResponse> extractTableOfContents(String markdownContent) {
+        if (markdownContent == null || markdownContent.isBlank()) {
+            return List.of();
+        }
+
+        Map<String, Integer> usedAnchors = new LinkedHashMap<>();
+        return markdownContent.lines()
+                .map(String::trim)
+                .map(line -> {
+                    int level = 0;
+                    while (level < line.length() && line.charAt(level) == '#') {
+                        level += 1;
+                    }
+
+                    if (level < 2 || level > 4) {
+                        return null;
+                    }
+
+                    if (line.length() <= level || line.charAt(level) != ' ') {
+                        return null;
+                    }
+
+                    String title = line.substring(level + 1).trim();
+                    if (title.isBlank()) {
+                        return null;
+                    }
+
+                    String baseAnchor = SlugUtil.toSlug(title);
+                    int occurrence = usedAnchors.getOrDefault(baseAnchor, 0) + 1;
+                    usedAnchors.put(baseAnchor, occurrence);
+                    String anchor = occurrence == 1 ? baseAnchor : baseAnchor + "-" + occurrence;
+                    return new PostTocItemResponse(anchor, title, level);
+                })
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private Map<Long, Long> resolveLikesByPostId(List<Post> posts) {

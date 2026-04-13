@@ -19,6 +19,7 @@ public record PostSummaryResponse(
         OffsetDateTime publishedAt,
         OffsetDateTime scheduledPublishAt,
         OffsetDateTime updatedAt,
+        int readingTimeMinutes,
         long likesCount,
         boolean likedByMe,
         boolean bookmarkedByMe,

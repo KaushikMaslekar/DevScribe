@@ -20,6 +20,8 @@ public record PostDetailResponse(
         OffsetDateTime scheduledPublishAt,
         OffsetDateTime updatedAt,
         List<String> tags,
+        int readingTimeMinutes,
+        List<PostTocItemResponse> tableOfContents,
         long views,
         long likesCount,
         boolean likedByMe,
