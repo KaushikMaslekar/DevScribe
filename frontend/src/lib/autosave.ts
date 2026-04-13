@@ -30,6 +30,7 @@ interface UseAutosaveDraftParams {
 interface UseAutosaveDraftResult {
   saveState: AutosaveState;
   lastSavedAt: string | null;
+  setBaseRevision: (revision: number) => void;
 }
 
 export function readDraftSnapshot(): DraftSnapshot | null {
@@ -233,5 +234,8 @@ export function useAutosaveDraft({
   return {
     saveState,
     lastSavedAt,
+    setBaseRevision: (revision: number) => {
+      revisionRef.current = revision;
+    },
   };
 }

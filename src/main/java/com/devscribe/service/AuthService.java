@@ -46,6 +46,7 @@ public class AuthService {
         User user = User.builder()
                 .email(normalizedEmail)
                 .username(request.username().trim())
+                .displayName(request.username().trim())
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(UserRole.USER)
                 .build();
@@ -89,6 +90,9 @@ public class AuthService {
                 user.getId(),
                 user.getEmail(),
                 user.getUsername(),
+                user.getDisplayName(),
+                user.getBio(),
+                user.getAvatarUrl(),
                 user.getRole()
         );
     }

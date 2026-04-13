@@ -18,7 +18,9 @@ public record PostDetailResponse(
         List<String> tags,
         long views,
         long likesCount,
-        boolean likedByMe
+        boolean likedByMe,
+        boolean bookmarkedByMe,
+        boolean authorFollowedByMe
         ) {
 
 }

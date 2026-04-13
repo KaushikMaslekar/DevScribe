@@ -1,5 +1,7 @@
 package com.devscribe.controller;
 
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
@@ -15,10 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.devscribe.dto.post.AutosavePostRequest;
 import com.devscribe.dto.post.AutosavePostResponse;
+import com.devscribe.dto.post.AutosaveSnapshotResponse;
 import com.devscribe.dto.post.CreatePostRequest;
+import com.devscribe.dto.post.PostBookmarkResponse;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostLikeResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
+import com.devscribe.dto.post.RestoreAutosaveResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
 import com.devscribe.dto.post.UpdatePostTagsRequest;
 import com.devscribe.entity.PostStatus;
@@ -39,11 +44,28 @@ public class PostController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "false") boolean mine,
+            @RequestParam(defaultValue = "false") boolean following,
             @RequestParam(required = false) PostStatus status,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String query
     ) {
-        return ResponseEntity.ok(postService.getPosts(page, size, mine, status, tag, query));
+        return ResponseEntity.ok(postService.getPosts(page, size, mine, following, status, tag, query));
+    }
+
+    @GetMapping("/feed")
+    public ResponseEntity<Page<PostSummaryResponse>> feed(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(postService.getPosts(page, size, false, true, null, null, null));
+    }
+
+    @GetMapping("/bookmarks")
+    public ResponseEntity<Page<PostSummaryResponse>> bookmarks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(postService.getBookmarkedPosts(page, size));
     }
 
     @GetMapping("/{slug}")
@@ -59,6 +81,19 @@ public class PostController {
     @PostMapping("/autosave")
     public ResponseEntity<AutosavePostResponse> autosave(@Valid @RequestBody AutosavePostRequest request) {
         return ResponseEntity.ok(postService.autosave(request));
+    }
+
+    @GetMapping("/{id}/autosave-snapshots")
+    public ResponseEntity<List<AutosaveSnapshotResponse>> autosaveTimeline(@PathVariable @NonNull Long id) {
+        return ResponseEntity.ok(postService.getAutosaveTimeline(id));
+    }
+
+    @PostMapping("/{id}/autosave-snapshots/{snapshotId}/restore")
+    public ResponseEntity<RestoreAutosaveResponse> restoreAutosaveSnapshot(
+            @PathVariable @NonNull Long id,
+            @PathVariable @NonNull Long snapshotId
+    ) {
+        return ResponseEntity.ok(postService.restoreAutosaveSnapshot(id, snapshotId));
     }
 
     @PutMapping("/{id}")
@@ -96,5 +131,15 @@ public class PostController {
     @DeleteMapping("/{id}/like")
     public ResponseEntity<PostLikeResponse> unlike(@PathVariable @NonNull Long id) {
         return ResponseEntity.ok(postService.unlike(id));
+    }
+
+    @PostMapping("/{id}/bookmark")
+    public ResponseEntity<PostBookmarkResponse> bookmark(@PathVariable @NonNull Long id) {
+        return ResponseEntity.ok(postService.bookmark(id));
+    }
+
+    @DeleteMapping("/{id}/bookmark")
+    public ResponseEntity<PostBookmarkResponse> unbookmark(@PathVariable @NonNull Long id) {
+        return ResponseEntity.ok(postService.unbookmark(id));
     }
 }

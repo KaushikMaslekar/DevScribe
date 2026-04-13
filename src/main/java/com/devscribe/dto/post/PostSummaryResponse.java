@@ -16,7 +16,9 @@ public record PostSummaryResponse(
         OffsetDateTime publishedAt,
         OffsetDateTime updatedAt,
         long likesCount,
-        boolean likedByMe
+        boolean likedByMe,
+        boolean bookmarkedByMe,
+        boolean authorFollowedByMe
         ) {
 
 }

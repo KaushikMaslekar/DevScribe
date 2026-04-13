@@ -6,6 +6,9 @@ public record UserMeResponse(
         Long id,
         String email,
         String username,
+        String displayName,
+        String bio,
+        String avatarUrl,
         UserRole role
         ) {
 

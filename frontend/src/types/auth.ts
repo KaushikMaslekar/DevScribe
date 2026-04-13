@@ -4,6 +4,9 @@ export interface MeResponse {
   id: number;
   email: string;
   username: string;
+  displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
   role: UserRole;
 }
 

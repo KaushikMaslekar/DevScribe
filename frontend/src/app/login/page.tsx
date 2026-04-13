@@ -70,7 +70,11 @@ export default function LoginPage() {
           minLength={8}
         />
 
-        {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
+        {error ? (
+          <div className="mt-3 rounded-md border border-white/20 bg-black px-3 py-2 text-sm text-white">
+            {error}
+          </div>
+        ) : null}
 
         <Button type="submit" className="mt-5 w-full" disabled={isSubmitting}>
           {isSubmitting ? "Signing in..." : "Continue"}

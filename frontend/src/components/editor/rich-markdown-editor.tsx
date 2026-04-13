@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -46,10 +52,15 @@ export function RichMarkdownEditor({
   collaboratorName,
 }: RichMarkdownEditorProps) {
   const [markdown, setMarkdown] = useState(initialMarkdown);
+  const deferredMarkdown = useDeferredValue(markdown);
 
   const initialContent = useMemo(
     () => markdownToHtml(initialMarkdown),
     [initialMarkdown],
+  );
+  const previewHtml = useMemo(
+    () => markdownToHtml(deferredMarkdown),
+    [deferredMarkdown],
   );
 
   const collaborationUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
@@ -108,7 +119,7 @@ export function RichMarkdownEditor({
               provider: collaborationRuntime.provider,
               user: {
                 name: collaboratorName ?? "Collaborator",
-                color: "#2563eb",
+                color: "#ffffff",
               },
             }),
           ]
@@ -124,7 +135,7 @@ export function RichMarkdownEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-slate min-h-[18rem] max-w-none rounded-lg border bg-background px-4 py-3 text-sm focus:outline-none",
+          "prose min-h-[18rem] max-w-none rounded-lg border border-white/20 bg-black px-4 py-3 text-sm text-white focus:outline-none",
       },
     },
     onUpdate({ editor: currentEditor }) {
@@ -151,7 +162,7 @@ export function RichMarkdownEditor({
   return (
     <div className="space-y-4">
       {collaborationSession ? (
-        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+        <div className="rounded-lg border border-white/20 bg-black px-4 py-3 text-xs text-white/70 animate-fade-up">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>
               Collaboration room: {collaborationSession.room} · Role:{" "}
@@ -165,7 +176,7 @@ export function RichMarkdownEditor({
           </div>
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2 rounded-lg border bg-muted/40 p-2">
+      <div className="flex flex-wrap gap-2 rounded-lg border border-white/20 bg-black p-2 animate-fade-up">
         <ToolbarButton
           onClick={() =>
             editor?.chain().focus().toggleHeading({ level: 1 }).run()
@@ -236,22 +247,22 @@ export function RichMarkdownEditor({
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <EditorContent editor={editor} />
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs text-white/65">
             TipTap is stored as markdown in the backend. The preview updates
             live.
           </p>
         </div>
 
-        <div className="rounded-lg border bg-card p-4 text-card-foreground">
+        <div className="rounded-lg border border-white/20 bg-black p-4 text-white animate-fade-up">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Live Preview</h3>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-white/65">
               Markdown length: {markdown.length}
             </span>
           </div>
           <div
-            className="prose prose-slate max-w-none prose-pre:rounded-lg prose-pre:bg-slate-950 prose-pre:text-slate-100"
-            dangerouslySetInnerHTML={{ __html: markdownToHtml(markdown) }}
+            className="prose max-w-none prose-headings:text-white prose-p:text-white prose-li:text-white prose-strong:text-white prose-code:text-white prose-pre:rounded-lg prose-pre:bg-black prose-pre:text-white"
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         </div>
       </div>

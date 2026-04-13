@@ -35,6 +35,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
+    Page<Post> findDistinctByAuthor_IdInAndStatusOrderByPublishedAtDesc(
+            Iterable<Long> authorIds,
+            PostStatus status,
+            Pageable pageable
+    );
+
+    long countByAuthor_IdAndStatus(Long authorId, PostStatus status);
+
     @Query(value = """
             select distinct p.*
             from posts p

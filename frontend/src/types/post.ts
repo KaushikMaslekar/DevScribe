@@ -12,6 +12,8 @@ export interface PostSummary {
   updatedAt: string;
   likesCount: number;
   likedByMe: boolean;
+  bookmarkedByMe: boolean;
+  authorFollowedByMe: boolean;
 }
 
 export interface PostDetail {
@@ -28,12 +30,19 @@ export interface PostDetail {
   views: number;
   likesCount: number;
   likedByMe: boolean;
+  bookmarkedByMe: boolean;
+  authorFollowedByMe: boolean;
 }
 
 export interface PostLikeResponse {
   postId: number;
   likesCount: number;
   likedByMe: boolean;
+}
+
+export interface PostBookmarkResponse {
+  postId: number;
+  bookmarkedByMe: boolean;
 }
 
 export interface PageResponse<T> {
@@ -74,6 +83,27 @@ export interface AutosavePostResponse {
   autosaveRevision: number;
   accepted: boolean;
   savedAt: string;
+}
+
+export interface AutosaveSnapshot {
+  id: number;
+  revision: number;
+  title: string;
+  excerpt: string | null;
+  markdownContent: string;
+  tags: string[];
+  savedAt: string;
+}
+
+export interface RestoreAutosaveResponse {
+  postId: number;
+  slug: string;
+  autosaveRevision: number;
+  title: string;
+  excerpt: string | null;
+  markdownContent: string;
+  tags: string[];
+  restoredAt: string;
 }
 
 export type AutosaveState =

@@ -1,13 +1,16 @@
 import { apiClient } from "@/lib/api-client";
 import type {
+  AutosaveSnapshot,
   AutosavePostRequest,
   AutosavePostResponse,
   CreatePostRequest,
   PageResponse,
+  PostBookmarkResponse,
   PostDetail,
   PostLikeResponse,
   PostStatus,
   PostSummary,
+  RestoreAutosaveResponse,
   UpdatePostRequest,
 } from "@/types/post";
 
@@ -64,6 +67,25 @@ export async function autosavePost(
   return data;
 }
 
+export async function listAutosaveSnapshots(
+  postId: number,
+): Promise<AutosaveSnapshot[]> {
+  const { data } = await apiClient.get<AutosaveSnapshot[]>(
+    `/posts/${postId}/autosave-snapshots`,
+  );
+  return data;
+}
+
+export async function restoreAutosaveSnapshot(
+  postId: number,
+  snapshotId: number,
+): Promise<RestoreAutosaveResponse> {
+  const { data } = await apiClient.post<RestoreAutosaveResponse>(
+    `/posts/${postId}/autosave-snapshots/${snapshotId}/restore`,
+  );
+  return data;
+}
+
 export async function likePost(id: number): Promise<PostLikeResponse> {
   const { data } = await apiClient.post<PostLikeResponse>(`/posts/${id}/like`);
   return data;
@@ -72,6 +94,48 @@ export async function likePost(id: number): Promise<PostLikeResponse> {
 export async function unlikePost(id: number): Promise<PostLikeResponse> {
   const { data } = await apiClient.delete<PostLikeResponse>(
     `/posts/${id}/like`,
+  );
+  return data;
+}
+
+export async function bookmarkPost(id: number): Promise<PostBookmarkResponse> {
+  const { data } = await apiClient.post<PostBookmarkResponse>(
+    `/posts/${id}/bookmark`,
+  );
+  return data;
+}
+
+export async function unbookmarkPost(
+  id: number,
+): Promise<PostBookmarkResponse> {
+  const { data } = await apiClient.delete<PostBookmarkResponse>(
+    `/posts/${id}/bookmark`,
+  );
+  return data;
+}
+
+export async function listBookmarkedPosts(params?: {
+  page?: number;
+  size?: number;
+}): Promise<PageResponse<PostSummary>> {
+  const { data } = await apiClient.get<PageResponse<PostSummary>>(
+    "/posts/bookmarks",
+    {
+      params,
+    },
+  );
+  return data;
+}
+
+export async function listFollowingFeed(params?: {
+  page?: number;
+  size?: number;
+}): Promise<PageResponse<PostSummary>> {
+  const { data } = await apiClient.get<PageResponse<PostSummary>>(
+    "/posts/feed",
+    {
+      params,
+    },
   );
   return data;
 }

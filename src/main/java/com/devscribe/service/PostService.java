@@ -11,6 +11,7 @@ import java.util.Set;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -27,12 +28,17 @@ import org.springframework.web.server.ResponseStatusException;
 import com.devscribe.config.CachingConfig;
 import com.devscribe.dto.post.AutosavePostRequest;
 import com.devscribe.dto.post.AutosavePostResponse;
+import com.devscribe.dto.post.AutosaveSnapshotResponse;
 import com.devscribe.dto.post.CreatePostRequest;
+import com.devscribe.dto.post.PostBookmarkResponse;
 import com.devscribe.dto.post.PostDetailResponse;
 import com.devscribe.dto.post.PostLikeResponse;
 import com.devscribe.dto.post.PostSummaryResponse;
+import com.devscribe.dto.post.RestoreAutosaveResponse;
 import com.devscribe.dto.post.UpdatePostRequest;
 import com.devscribe.entity.Post;
+import com.devscribe.entity.PostAutosaveSnapshot;
+import com.devscribe.entity.PostBookmark;
 import com.devscribe.entity.PostLike;
 import com.devscribe.entity.PostStatus;
 import com.devscribe.entity.Tag;
@@ -40,8 +46,11 @@ import com.devscribe.entity.User;
 import com.devscribe.realtime.PostRealtimeEvent;
 import com.devscribe.realtime.PostRealtimeEventType;
 import com.devscribe.realtime.PostRealtimePublisher;
+import com.devscribe.repository.PostAutosaveSnapshotRepository;
+import com.devscribe.repository.PostBookmarkRepository;
 import com.devscribe.repository.PostLikeRepository;
 import com.devscribe.repository.PostRepository;
+import com.devscribe.repository.UserFollowRepository;
 import com.devscribe.repository.UserRepository;
 import com.devscribe.util.SlugUtil;
 
@@ -51,8 +60,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PostService {
 
+    private static final int MAX_AUTOSAVE_SNAPSHOTS = 50;
+
     private final PostRepository postRepository;
+    private final PostAutosaveSnapshotRepository postAutosaveSnapshotRepository;
+    private final PostBookmarkRepository postBookmarkRepository;
     private final PostLikeRepository postLikeRepository;
+    private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
     private final TagService tagService;
     private final PostRealtimePublisher postRealtimePublisher;
@@ -62,6 +76,7 @@ public class PostService {
             int page,
             int size,
             boolean mine,
+            boolean following,
             PostStatus status,
             String tag,
             String query
@@ -71,7 +86,19 @@ public class PostService {
         String normalizedTag = normalizeTag(tag);
         String normalizedQuery = normalizeSearchQuery(query);
         Page<Post> postPage;
-        if (mine) {
+        if (following) {
+            User currentUser = getCurrentUser();
+            List<Long> followedAuthorIds = userFollowRepository.findFollowedIdsByFollowerId(currentUser.getId());
+            if (followedAuthorIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+
+            postPage = postRepository.findDistinctByAuthor_IdInAndStatusOrderByPublishedAtDesc(
+                    followedAuthorIds,
+                    PostStatus.PUBLISHED,
+                    pageable
+            );
+        } else if (mine) {
             User user = getCurrentUser();
             if (status != null && normalizedTag != null) {
                 postPage = postRepository.findDistinctByAuthor_IdAndStatusAndTags_SlugOrderByUpdatedAtDesc(
@@ -105,8 +132,10 @@ public class PostService {
 
         Map<Long, Long> likesByPostId = resolveLikesByPostId(postPage.getContent());
         Set<Long> likedPostIds = resolveLikedPostIds(postPage.getContent());
+        Set<Long> bookmarkedPostIds = resolveBookmarkedPostIds(postPage.getContent());
+        Set<Long> followedAuthorIds = resolveFollowedAuthorIds(postPage.getContent());
 
-        return postPage.map(post -> toSummary(post, likesByPostId, likedPostIds));
+        return postPage.map(post -> toSummary(post, likesByPostId, likedPostIds, bookmarkedPostIds, followedAuthorIds));
     }
 
     @Transactional(readOnly = true)
@@ -117,7 +146,9 @@ public class PostService {
 
         long likesCount = postLikeRepository.countByPost_Id(post.getId());
         boolean likedByMe = isLikedByCurrentUser(post.getId());
-        return toDetail(post, likesCount, likedByMe);
+        boolean bookmarkedByMe = isBookmarkedByCurrentUser(post.getId());
+        boolean authorFollowedByMe = isAuthorFollowedByCurrentUser(post.getAuthor().getId());
+        return toDetail(post, likesCount, likedByMe, bookmarkedByMe, authorFollowedByMe);
     }
 
     @Transactional
@@ -153,6 +184,58 @@ public class PostService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
+    public PostBookmarkResponse bookmark(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only published posts can be bookmarked");
+        }
+
+        User currentUser = getCurrentUser();
+        if (!postBookmarkRepository.existsByUser_IdAndPost_Id(currentUser.getId(), postId)) {
+            postBookmarkRepository.save(PostBookmark.builder().user(currentUser).post(post).build());
+        }
+
+        return new PostBookmarkResponse(postId, true);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {CachingConfig.CACHE_POST_BY_SLUG, CachingConfig.CACHE_PUBLISHED_POSTS}, allEntries = true)
+    public PostBookmarkResponse unbookmark(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only published posts can be unbookmarked");
+        }
+
+        User currentUser = getCurrentUser();
+        postBookmarkRepository.deleteByUser_IdAndPost_Id(currentUser.getId(), postId);
+
+        return new PostBookmarkResponse(postId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PostSummaryResponse> getBookmarkedPosts(int page, int size) {
+        User currentUser = getCurrentUser();
+        Pageable pageable = PageRequest.of(page, Math.min(size, 50), Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<PostBookmark> bookmarkPage = postBookmarkRepository.findByUser_IdOrderByCreatedAtDesc(currentUser.getId(), pageable);
+        List<Post> posts = bookmarkPage.map(PostBookmark::getPost).getContent();
+
+        Map<Long, Long> likesByPostId = resolveLikesByPostId(posts);
+        Set<Long> likedPostIds = resolveLikedPostIds(posts);
+        Set<Long> bookmarkedPostIds = resolveBookmarkedPostIds(posts);
+        Set<Long> followedAuthorIds = resolveFollowedAuthorIds(posts);
+
+        List<PostSummaryResponse> content = posts.stream()
+                .map(post -> toSummary(post, likesByPostId, likedPostIds, bookmarkedPostIds, followedAuthorIds))
+                .toList();
+
+        return new PageImpl<>(content, pageable, bookmarkPage.getTotalElements());
+    }
+
+    @Transactional
     public PostDetailResponse create(CreatePostRequest request) {
         User currentUser = getCurrentUser();
 
@@ -170,7 +253,13 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.CREATED));
-        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
+        return toDetail(
+                saved,
+                postLikeRepository.countByPost_Id(saved.getId()),
+                isLikedByCurrentUser(saved.getId()),
+                isBookmarkedByCurrentUser(saved.getId()),
+                isAuthorFollowedByCurrentUser(saved.getAuthor().getId())
+        );
     }
 
     @Transactional
@@ -197,6 +286,7 @@ public class PostService {
 
             post.setTags(resolveTags(request.tags()));
             Post saved = postRepository.save(post);
+            saveAutosaveSnapshot(saved);
             postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
             return new AutosavePostResponse(
                     saved.getId(),
@@ -240,6 +330,7 @@ public class PostService {
         post.setAutosaveRevision(incomingRevision);
 
         Post saved = postRepository.save(post);
+        saveAutosaveSnapshot(saved);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
         return new AutosavePostResponse(
                 saved.getId(),
@@ -267,7 +358,13 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
-        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
+        return toDetail(
+                saved,
+                postLikeRepository.countByPost_Id(saved.getId()),
+                isLikedByCurrentUser(saved.getId()),
+                isBookmarkedByCurrentUser(saved.getId()),
+                isAuthorFollowedByCurrentUser(saved.getAuthor().getId())
+        );
     }
 
     @Transactional
@@ -280,7 +377,13 @@ public class PostService {
         post.setTags(resolveTags(tags));
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
-        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
+        return toDetail(
+                saved,
+                postLikeRepository.countByPost_Id(saved.getId()),
+                isLikedByCurrentUser(saved.getId()),
+                isBookmarkedByCurrentUser(saved.getId()),
+                isAuthorFollowedByCurrentUser(saved.getAuthor().getId())
+        );
     }
 
     @Transactional
@@ -308,7 +411,57 @@ public class PostService {
 
         Post saved = postRepository.save(post);
         postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.PUBLISHED));
-        return toDetail(saved, postLikeRepository.countByPost_Id(saved.getId()), isLikedByCurrentUser(saved.getId()));
+        return toDetail(
+                saved,
+                postLikeRepository.countByPost_Id(saved.getId()),
+                isLikedByCurrentUser(saved.getId()),
+                isBookmarkedByCurrentUser(saved.getId()),
+                isAuthorFollowedByCurrentUser(saved.getAuthor().getId())
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<AutosaveSnapshotResponse> getAutosaveTimeline(@NonNull Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        ensureOwnership(post);
+
+        return postAutosaveSnapshotRepository.findTop50ByPost_IdOrderByCreatedAtDesc(postId)
+                .stream()
+                .map(this::toAutosaveSnapshotResponse)
+                .toList();
+    }
+
+    @Transactional
+    public RestoreAutosaveResponse restoreAutosaveSnapshot(@NonNull Long postId, @NonNull Long snapshotId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Post not found"));
+        ensureOwnership(post);
+
+        PostAutosaveSnapshot snapshot = postAutosaveSnapshotRepository.findByIdAndPost_Id(snapshotId, postId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Autosave snapshot not found"));
+
+        post.setTitle(normalizeAutosaveTitle(snapshot.getTitle()));
+        post.setSlug(createUniqueSlug(post.getTitle(), post.getId()));
+        post.setExcerpt(snapshot.getExcerpt());
+        post.setMarkdownContent(normalizeAutosaveMarkdown(snapshot.getMarkdownContent()));
+        post.setTags(resolveTags(parseTagsCsv(snapshot.getTagsCsv())));
+        post.setAutosaveRevision(Math.max(snapshot.getRevision() + 1, post.getAutosaveRevision() + 1));
+
+        Post saved = postRepository.save(post);
+        saveAutosaveSnapshot(saved);
+        postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.UPDATED));
+
+        return new RestoreAutosaveResponse(
+                saved.getId(),
+                saved.getSlug(),
+                saved.getAutosaveRevision(),
+                saved.getTitle(),
+                saved.getExcerpt(),
+                saved.getMarkdownContent(),
+                toTagSlugs(saved),
+                saved.getUpdatedAt()
+        );
     }
 
     private void ensureOwnership(Post post) {
@@ -363,7 +516,51 @@ public class PostService {
         return markdownContent;
     }
 
-    private PostSummaryResponse toSummary(Post post, Map<Long, Long> likesByPostId, Set<Long> likedPostIds) {
+    private AutosaveSnapshotResponse toAutosaveSnapshotResponse(PostAutosaveSnapshot snapshot) {
+        return new AutosaveSnapshotResponse(
+                snapshot.getId(),
+                snapshot.getRevision(),
+                snapshot.getTitle(),
+                snapshot.getExcerpt(),
+                snapshot.getMarkdownContent(),
+                parseTagsCsv(snapshot.getTagsCsv()),
+                snapshot.getCreatedAt()
+        );
+    }
+
+    private void saveAutosaveSnapshot(Post post) {
+        PostAutosaveSnapshot snapshot = PostAutosaveSnapshot.builder()
+                .post(post)
+                .revision(post.getAutosaveRevision())
+                .title(post.getTitle())
+                .excerpt(post.getExcerpt())
+                .markdownContent(post.getMarkdownContent())
+                .tagsCsv(String.join(",", toTagSlugs(post)))
+                .build();
+
+        postAutosaveSnapshotRepository.save(snapshot);
+        postAutosaveSnapshotRepository.deleteOlderSnapshots(post.getId(), MAX_AUTOSAVE_SNAPSHOTS);
+    }
+
+    private List<String> parseTagsCsv(String tagsCsv) {
+        if (tagsCsv == null || tagsCsv.isBlank()) {
+            return List.of();
+        }
+
+        return List.of(tagsCsv.split(","))
+                .stream()
+                .map(String::trim)
+                .filter(tag -> !tag.isBlank())
+                .toList();
+    }
+
+    private PostSummaryResponse toSummary(
+            Post post,
+            Map<Long, Long> likesByPostId,
+            Set<Long> likedPostIds,
+            Set<Long> bookmarkedPostIds,
+            Set<Long> followedAuthorIds
+    ) {
         return new PostSummaryResponse(
                 post.getId(),
                 post.getSlug(),
@@ -375,11 +572,19 @@ public class PostService {
                 post.getPublishedAt(),
                 post.getUpdatedAt(),
                 likesByPostId.getOrDefault(post.getId(), 0L),
-                likedPostIds.contains(post.getId())
+                likedPostIds.contains(post.getId()),
+                bookmarkedPostIds.contains(post.getId()),
+                followedAuthorIds.contains(post.getAuthor().getId())
         );
     }
 
-    private PostDetailResponse toDetail(Post post, long likesCount, boolean likedByMe) {
+    private PostDetailResponse toDetail(
+            Post post,
+            long likesCount,
+            boolean likedByMe,
+            boolean bookmarkedByMe,
+            boolean authorFollowedByMe
+    ) {
         return new PostDetailResponse(
                 post.getId(),
                 post.getSlug(),
@@ -393,7 +598,9 @@ public class PostService {
                 toTagSlugs(post),
                 0,
                 likesCount,
-                likedByMe
+                likedByMe,
+                bookmarkedByMe,
+                authorFollowedByMe
         );
     }
 
@@ -427,6 +634,45 @@ public class PostService {
     private boolean isLikedByCurrentUser(Long postId) {
         User currentUser = getCurrentUserOrNull();
         return currentUser != null && postLikeRepository.existsByPost_IdAndUser_Id(postId, currentUser.getId());
+    }
+
+    private Set<Long> resolveBookmarkedPostIds(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return Set.of();
+        }
+
+        User currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            return Set.of();
+        }
+
+        List<Long> postIds = posts.stream().map(Post::getId).toList();
+        return new HashSet<>(postBookmarkRepository.findBookmarkedPostIdsByUserIdAndPostIds(currentUser.getId(), postIds));
+    }
+
+    private Set<Long> resolveFollowedAuthorIds(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return Set.of();
+        }
+
+        User currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            return Set.of();
+        }
+
+        Set<Long> authorIds = posts.stream().map(post -> post.getAuthor().getId()).collect(HashSet::new, Set::add, Set::addAll);
+        List<Long> followedAuthorIds = userFollowRepository.findFollowedIdsByFollowerId(currentUser.getId());
+        return followedAuthorIds.stream().filter(authorIds::contains).collect(HashSet::new, Set::add, Set::addAll);
+    }
+
+    private boolean isBookmarkedByCurrentUser(Long postId) {
+        User currentUser = getCurrentUserOrNull();
+        return currentUser != null && postBookmarkRepository.existsByUser_IdAndPost_Id(currentUser.getId(), postId);
+    }
+
+    private boolean isAuthorFollowedByCurrentUser(Long authorId) {
+        User currentUser = getCurrentUserOrNull();
+        return currentUser != null && userFollowRepository.existsByFollower_IdAndFollowed_Id(currentUser.getId(), authorId);
     }
 
     private User getCurrentUserOrNull() {

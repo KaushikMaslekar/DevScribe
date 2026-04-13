@@ -26,6 +26,15 @@ public class User {
     @Column(nullable = false, unique = true, length = 64)
     private String username;
 
+    @Column(name = "display_name", length = 120)
+    private String displayName;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
+
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
+    private String avatarUrl;
+
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
