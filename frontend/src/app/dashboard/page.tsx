@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { me } from "@/lib/auth-api";
+import { listFeatureFlags, updateFeatureFlag } from "@/lib/feature-flag-api";
 import {
   addCollaborator,
   getCollaborationSession,
@@ -23,13 +24,16 @@ import {
   createPost,
   deletePost,
   listPosts,
+  listTrashPosts,
   listAutosaveSnapshots,
   publishPost,
+  restorePost,
   restoreAutosaveSnapshot,
   updatePost,
 } from "@/lib/post-api";
 import { updateMyProfile } from "@/lib/user-api";
 import type { AutosaveSnapshot, PostStatus } from "@/types/post";
+import type { FeatureFlag } from "@/types/feature";
 
 const CURRENT_DRAFT_COMPARE_ID = "CURRENT_DRAFT";
 
@@ -125,6 +129,11 @@ export default function DashboardPage() {
     queryFn: me,
   });
 
+  const currentRole = profileQuery.data?.role;
+  const canUseAdminTools = currentRole === "ADMIN";
+  const canUseEditorialTools =
+    currentRole === "EDITOR" || currentRole === "ADMIN";
+
   const postsQuery = useQuery({
     queryKey: ["posts", "mine", statusFilter],
     queryFn: () =>
@@ -134,6 +143,18 @@ export default function DashboardPage() {
         page: 0,
         size: 20,
       }),
+  });
+
+  const trashQuery = useQuery({
+    queryKey: ["posts", "trash"],
+    queryFn: () => listTrashPosts({ page: 0, size: 20 }),
+    enabled: profileQuery.isSuccess,
+  });
+
+  const featureFlagsQuery = useQuery({
+    queryKey: ["features", "flags"],
+    queryFn: listFeatureFlags,
+    enabled: profileQuery.isSuccess,
   });
 
   const collaborationSessionQuery = useQuery({
@@ -297,6 +318,22 @@ export default function DashboardPage() {
     },
   });
 
+  const restorePostMutation = useMutation({
+    mutationFn: restorePost,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts", "mine"] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "published"] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "trash"] });
+    },
+  });
+
+  const updateFeatureFlagMutation = useMutation({
+    mutationFn: updateFeatureFlag,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["features", "flags"] });
+    },
+  });
+
   const addCollaboratorMutation = useMutation({
     mutationFn: (identifier: string) =>
       addCollaborator(draftPostId as number, { identifier }),
@@ -416,6 +453,32 @@ export default function DashboardPage() {
     });
   }
 
+  function handleToggleFlag(flag: FeatureFlag) {
+    if (!canUseAdminTools) {
+      return;
+    }
+
+    updateFeatureFlagMutation.mutate({
+      key: flag.key,
+      description: flag.description ?? undefined,
+      enabled: !flag.enabled,
+      rolloutPercentage: flag.rolloutPercentage,
+    });
+  }
+
+  function handleRolloutChange(flag: FeatureFlag, nextValue: number) {
+    if (!canUseAdminTools) {
+      return;
+    }
+
+    updateFeatureFlagMutation.mutate({
+      key: flag.key,
+      description: flag.description ?? undefined,
+      enabled: flag.enabled,
+      rolloutPercentage: Math.max(0, Math.min(100, nextValue)),
+    });
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-14 md:px-10 text-white bg-black animate-fade-up">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -448,7 +511,9 @@ export default function DashboardPage() {
               </p>
               <p>
                 <span className="font-medium text-white">Role:</span>{" "}
-                {profileQuery.data.role}
+                <span className="rounded-full border border-white/30 px-2 py-0.5 text-xs">
+                  {profileQuery.data.role}
+                </span>
               </p>
             </div>
           ) : null}
@@ -502,6 +567,132 @@ export default function DashboardPage() {
             {updateProfileMutation.isPending ? "Updating..." : "Update Profile"}
           </Button>
         </form>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section className="rounded-xl border border-white/20 bg-black p-6 text-white">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Trash Bin</h2>
+            <span className="text-xs text-white/60">Soft-deleted posts</span>
+          </div>
+
+          {trashQuery.isLoading ? (
+            <p className="mt-3 text-sm">Loading trash...</p>
+          ) : null}
+          {trashQuery.isError ? (
+            <p className="mt-3 text-sm text-white/70">
+              Unable to load trash posts.
+            </p>
+          ) : null}
+
+          {trashQuery.data ? (
+            <div className="mt-4 space-y-3">
+              {trashQuery.data.content.length === 0 ? (
+                <p className="text-sm text-white/70">Trash is empty.</p>
+              ) : (
+                trashQuery.data.content.map((post) => (
+                  <div
+                    key={post.id}
+                    className="rounded-lg border border-white/20 p-3"
+                  >
+                    <p className="text-sm font-medium">{post.title}</p>
+                    <p className="mt-1 text-xs text-white/65">
+                      Deleted {new Date(post.deletedAt).toLocaleString()} by{" "}
+                      {post.deletedBy ?? "unknown"}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => restorePostMutation.mutate(post.id)}
+                        disabled={restorePostMutation.isPending}
+                      >
+                        Restore
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-xl border border-white/20 bg-black p-6 text-white">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Feature Flags</h2>
+            <span className="text-xs text-white/60">
+              {canUseAdminTools ? "Admin controls" : "Read only"}
+            </span>
+          </div>
+
+          {!canUseAdminTools ? (
+            <p className="mt-2 text-xs text-white/60">
+              You can view active flags for your cohort. Only admins can update.
+            </p>
+          ) : null}
+
+          {featureFlagsQuery.isLoading ? (
+            <p className="mt-3 text-sm">Loading flags...</p>
+          ) : null}
+          {featureFlagsQuery.isError ? (
+            <p className="mt-3 text-sm text-white/70">
+              Unable to load feature flags.
+            </p>
+          ) : null}
+
+          {featureFlagsQuery.data ? (
+            <div className="mt-4 space-y-3">
+              {featureFlagsQuery.data.map((flag) => (
+                <div
+                  key={flag.key}
+                  className="rounded-lg border border-white/20 p-3"
+                >
+                  <p className="text-sm font-medium">{flag.key}</p>
+                  <p className="mt-1 text-xs text-white/65">
+                    {flag.description ?? "No description"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={flag.enabled ? "default" : "outline"}
+                      onClick={() => handleToggleFlag(flag)}
+                      disabled={
+                        !canUseAdminTools || updateFeatureFlagMutation.isPending
+                      }
+                    >
+                      {flag.enabled ? "Enabled" : "Disabled"}
+                    </Button>
+                    <span className="rounded-full border border-white/25 px-2 py-1">
+                      For me: {flag.enabledForMe ? "ON" : "OFF"}
+                    </span>
+                    <label className="inline-flex items-center gap-2">
+                      Rollout
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={flag.rolloutPercentage}
+                        onChange={(event) =>
+                          handleRolloutChange(
+                            flag,
+                            Number(event.target.value || 0),
+                          )
+                        }
+                        disabled={
+                          !canUseAdminTools ||
+                          updateFeatureFlagMutation.isPending
+                        }
+                        className="w-16 rounded border border-white/25 bg-black px-2 py-1 text-xs"
+                      />
+                      %
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
       </div>
 
       <p className="mt-4 text-xs text-white/60">
@@ -964,8 +1155,13 @@ export default function DashboardPage() {
                       onClick={() => deletePostMutation.mutate(post.id)}
                       disabled={deletePostMutation.isPending}
                     >
-                      Delete
+                      Move to Trash
                     </Button>
+                    {canUseEditorialTools ? (
+                      <span className="inline-flex items-center rounded-full border border-white/25 px-2 py-1 text-xs text-white/70">
+                        Editorial controls enabled
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               ))

@@ -113,6 +113,15 @@ export interface RestoreAutosaveResponse {
   restoredAt: string;
 }
 
+export interface TrashPost {
+  id: number;
+  slug: string;
+  title: string;
+  deletedAt: string;
+  deletedBy: string | null;
+  updatedAt: string;
+}
+
 export type AutosaveState =
   | "idle"
   | "saving"

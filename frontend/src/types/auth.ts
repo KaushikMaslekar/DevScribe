@@ -1,4 +1,4 @@
-export type UserRole = "USER" | "ADMIN";
+export type UserRole = "WRITER" | "EDITOR" | "ADMIN";
 
 export interface MeResponse {
   id: number;

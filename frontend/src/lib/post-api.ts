@@ -11,6 +11,7 @@ import type {
   PostStatus,
   PostSummary,
   RestoreAutosaveResponse,
+  TrashPost,
   UpdatePostRequest,
 } from "@/types/post";
 
@@ -137,5 +138,23 @@ export async function listFollowingFeed(params?: {
       params,
     },
   );
+  return data;
+}
+
+export async function listTrashPosts(params?: {
+  page?: number;
+  size?: number;
+}): Promise<PageResponse<TrashPost>> {
+  const { data } = await apiClient.get<PageResponse<TrashPost>>(
+    "/posts/trash",
+    {
+      params,
+    },
+  );
+  return data;
+}
+
+export async function restorePost(id: number): Promise<PostDetail> {
+  const { data } = await apiClient.post<PostDetail>(`/posts/${id}/restore`);
   return data;
 }
