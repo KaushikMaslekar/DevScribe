@@ -41,6 +41,35 @@ function normalizeTagsForCompare(tags: string[]): string {
   return [...tags].sort((a, b) => a.localeCompare(b)).join(", ");
 }
 
+function toDateTimeLocalValue(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const offsetDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000,
+  );
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function toISOStringOrUndefined(value: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
+}
+
 const RichMarkdownEditor = dynamic(
   () =>
     import("@/components/editor/rich-markdown-editor").then(
@@ -65,6 +94,9 @@ export default function DashboardPage() {
   const [excerpt, setExcerpt] = useState(() => initialSnapshot?.excerpt ?? "");
   const [markdownContent, setMarkdownContent] = useState(
     () => initialSnapshot?.markdownContent ?? "",
+  );
+  const [scheduledPublishAt, setScheduledPublishAt] = useState(
+    () => initialSnapshot?.scheduledPublishAt ?? "",
   );
   const [tagsInput, setTagsInput] = useState(
     () => initialSnapshot?.tagsInput ?? "",
@@ -132,10 +164,11 @@ export default function DashboardPage() {
       title,
       excerpt,
       markdownContent,
+      scheduledPublishAt,
       tags: normalizedTags,
       savedAt: new Date().toISOString(),
     }),
-    [title, excerpt, markdownContent, normalizedTags],
+    [title, excerpt, markdownContent, scheduledPublishAt, normalizedTags],
   );
 
   const effectiveBaseSnapshotId = useMemo(() => {
@@ -214,6 +247,9 @@ export default function DashboardPage() {
       markdownChanged:
         normalizeCompareValue(selectedBaseSnapshot.markdownContent) !==
         normalizeCompareValue(selectedCompareTarget.markdownContent),
+      scheduleChanged:
+        normalizeCompareValue(selectedBaseSnapshot.scheduledPublishAt) !==
+        normalizeCompareValue(selectedCompareTarget.scheduledPublishAt),
       tagsChanged: tagsBase !== tagsTarget,
       baseTags: tagsBase,
       targetTags: tagsTarget,
@@ -297,6 +333,7 @@ export default function DashboardPage() {
     title,
     excerpt,
     markdownContent,
+    scheduledPublishAt,
     tagsInput,
   });
 
@@ -308,6 +345,7 @@ export default function DashboardPage() {
       setTitle(restored.title);
       setExcerpt(restored.excerpt ?? "");
       setMarkdownContent(restored.markdownContent);
+      setScheduledPublishAt(toDateTimeLocalValue(restored.scheduledPublishAt));
       setTagsInput(restored.tags.join(", "));
       setEditorResetKey((value) => value + 1);
       autosave.setBaseRevision(restored.autosaveRevision);
@@ -336,6 +374,7 @@ export default function DashboardPage() {
       title,
       excerpt: excerpt || undefined,
       markdownContent,
+      scheduledPublishAt: toISOStringOrUndefined(scheduledPublishAt),
       tags: normalizedTags,
     };
 
@@ -352,6 +391,7 @@ export default function DashboardPage() {
     setTitle("");
     setExcerpt("");
     setMarkdownContent("");
+    setScheduledPublishAt("");
     setTagsInput("");
     setCollaboratorIdentifier("");
     setBaseSnapshotId(null);
@@ -708,6 +748,16 @@ export default function DashboardPage() {
           value={excerpt}
           onChange={(event) => setExcerpt(event.target.value)}
         />
+        <label className="mt-4 mb-2 block text-sm">Schedule Publish</label>
+        <input
+          type="datetime-local"
+          className="w-full rounded-md border border-white/20 bg-black px-3 py-2 text-white outline-none ring-0 focus:border-white"
+          value={scheduledPublishAt}
+          onChange={(event) => setScheduledPublishAt(event.target.value)}
+        />
+        <p className="mt-2 text-xs text-white/60">
+          Leave blank to keep this draft unscheduled.
+        </p>
         <label className="mt-4 mb-2 block text-sm">Markdown Content</label>
         <RichMarkdownEditor
           key={editorResetKey}

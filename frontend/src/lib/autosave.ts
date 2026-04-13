@@ -11,6 +11,7 @@ export interface DraftSnapshot {
   title: string;
   excerpt: string;
   markdownContent: string;
+  scheduledPublishAt: string;
   tagsInput: string;
   revision: number;
   updatedAt: string;
@@ -21,6 +22,7 @@ interface UseAutosaveDraftParams {
   title: string;
   excerpt: string;
   markdownContent: string;
+  scheduledPublishAt: string;
   tagsInput: string;
   postId: number | null;
   initialRevision?: number;
@@ -67,6 +69,7 @@ export function useAutosaveDraft({
   title,
   excerpt,
   markdownContent,
+  scheduledPublishAt,
   tagsInput,
   postId,
   initialRevision = 0,
@@ -101,6 +104,7 @@ export function useAutosaveDraft({
         title,
         excerpt,
         markdownContent,
+        scheduledPublishAt,
         tagsInput,
         revision,
         updatedAt: new Date().toISOString(),
@@ -111,7 +115,7 @@ export function useAutosaveDraft({
         JSON.stringify(snapshot),
       );
     },
-    [postId, title, excerpt, markdownContent, tagsInput],
+    [postId, title, excerpt, markdownContent, scheduledPublishAt, tagsInput],
   );
 
   const runAutosave = useCallback(async () => {
@@ -134,6 +138,7 @@ export function useAutosaveDraft({
       title,
       excerpt: excerpt || undefined,
       markdownContent,
+      scheduledPublishAt: scheduledPublishAt || undefined,
       tags: normalizedTags,
     };
 
@@ -179,6 +184,7 @@ export function useAutosaveDraft({
     title,
     excerpt,
     markdownContent,
+    scheduledPublishAt,
     normalizedTags,
     postId,
     onPostIdChange,
@@ -207,7 +213,15 @@ export function useAutosaveDraft({
         clearTimeout(timerRef.current);
       }
     };
-  }, [enabled, title, excerpt, markdownContent, tagsInput, runAutosave]);
+  }, [
+    enabled,
+    title,
+    excerpt,
+    markdownContent,
+    scheduledPublishAt,
+    tagsInput,
+    runAutosave,
+  ]);
 
   useEffect(() => {
     const handleOnline = () => {

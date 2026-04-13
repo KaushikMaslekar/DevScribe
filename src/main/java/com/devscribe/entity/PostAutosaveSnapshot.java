@@ -48,6 +48,9 @@ public class PostAutosaveSnapshot {
     @Column(name = "markdown_content", nullable = false, columnDefinition = "TEXT")
     private String markdownContent;
 
+    @Column(name = "scheduled_publish_at")
+    private OffsetDateTime scheduledPublishAt;
+
     @Column(name = "tags_csv", columnDefinition = "TEXT")
     private String tagsCsv;
 

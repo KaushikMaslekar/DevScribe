@@ -10,6 +10,7 @@ public record RestoreAutosaveResponse(
         String title,
         String excerpt,
         String markdownContent,
+        OffsetDateTime scheduledPublishAt,
         List<String> tags,
         OffsetDateTime restoredAt
         ) {

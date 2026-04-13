@@ -14,6 +14,7 @@ public record PostDetailResponse(
         String authorUsername,
         PostStatus status,
         OffsetDateTime publishedAt,
+        OffsetDateTime scheduledPublishAt,
         OffsetDateTime updatedAt,
         List<String> tags,
         long views,

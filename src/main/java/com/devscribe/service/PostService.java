@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -69,6 +71,7 @@ public class PostService {
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
     private final TagService tagService;
+    private final CacheManager cacheManager;
     private final PostRealtimePublisher postRealtimePublisher;
 
     @Transactional(readOnly = true)
@@ -420,6 +423,36 @@ public class PostService {
         );
     }
 
+    @Transactional
+    public int publishDueScheduledPosts() {
+        List<Post> duePosts = postRepository
+                .findByStatusAndScheduledPublishAtIsNotNullAndScheduledPublishAtLessThanEqualOrderByScheduledPublishAtAsc(
+                        PostStatus.DRAFT,
+                        OffsetDateTime.now(),
+                        PageRequest.of(0, 50)
+                )
+                .getContent();
+
+        if (duePosts.isEmpty()) {
+            return 0;
+        }
+
+        OffsetDateTime publishedAt = OffsetDateTime.now();
+        for (Post post : duePosts) {
+            post.setStatus(PostStatus.PUBLISHED);
+            if (post.getPublishedAt() == null) {
+                post.setPublishedAt(publishedAt);
+            }
+            post.setScheduledPublishAt(null);
+
+            Post saved = postRepository.save(post);
+            postRealtimePublisher.publishPostEvent(toRealtimeEvent(saved, PostRealtimeEventType.PUBLISHED));
+        }
+
+        evictPublishedPostCaches();
+        return duePosts.size();
+    }
+
     @Transactional(readOnly = true)
     public List<AutosaveSnapshotResponse> getAutosaveTimeline(@NonNull Long postId) {
         Post post = postRepository.findById(postId)
@@ -523,6 +556,7 @@ public class PostService {
                 snapshot.getTitle(),
                 snapshot.getExcerpt(),
                 snapshot.getMarkdownContent(),
+                snapshot.getScheduledPublishAt(),
                 parseTagsCsv(snapshot.getTagsCsv()),
                 snapshot.getCreatedAt()
         );
@@ -535,6 +569,7 @@ public class PostService {
                 .title(post.getTitle())
                 .excerpt(post.getExcerpt())
                 .markdownContent(post.getMarkdownContent())
+                .scheduledPublishAt(post.getScheduledPublishAt())
                 .tagsCsv(String.join(",", toTagSlugs(post)))
                 .build();
 
@@ -570,6 +605,7 @@ public class PostService {
                 toTagSlugs(post),
                 post.getStatus(),
                 post.getPublishedAt(),
+                post.getScheduledPublishAt(),
                 post.getUpdatedAt(),
                 likesByPostId.getOrDefault(post.getId(), 0L),
                 likedPostIds.contains(post.getId()),
@@ -594,6 +630,7 @@ public class PostService {
                 post.getAuthor().getUsername(),
                 post.getStatus(),
                 post.getPublishedAt(),
+                post.getScheduledPublishAt(),
                 post.getUpdatedAt(),
                 toTagSlugs(post),
                 0,
@@ -722,5 +759,17 @@ public class PostService {
                 eventType,
                 OffsetDateTime.now()
         );
+    }
+
+    private void evictPublishedPostCaches() {
+        Cache postBySlugCache = cacheManager.getCache(CachingConfig.CACHE_POST_BY_SLUG);
+        if (postBySlugCache != null) {
+            postBySlugCache.clear();
+        }
+
+        Cache publishedPostsCache = cacheManager.getCache(CachingConfig.CACHE_PUBLISHED_POSTS);
+        if (publishedPostsCache != null) {
+            publishedPostsCache.clear();
+        }
     }
 }

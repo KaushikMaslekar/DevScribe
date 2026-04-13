@@ -9,6 +9,7 @@ export interface PostSummary {
   tags: string[];
   status: PostStatus;
   publishedAt: string | null;
+  scheduledPublishAt: string | null;
   updatedAt: string;
   likesCount: number;
   likedByMe: boolean;
@@ -25,6 +26,7 @@ export interface PostDetail {
   authorUsername: string;
   status: PostStatus;
   publishedAt: string | null;
+  scheduledPublishAt: string | null;
   updatedAt: string;
   tags: string[];
   views: number;
@@ -58,6 +60,7 @@ export interface CreatePostRequest {
   title: string;
   excerpt?: string;
   markdownContent: string;
+  scheduledPublishAt?: string;
   tags?: string[];
 }
 
@@ -65,6 +68,7 @@ export interface UpdatePostRequest {
   title: string;
   excerpt?: string;
   markdownContent: string;
+  scheduledPublishAt?: string;
   tags?: string[];
 }
 
@@ -74,6 +78,7 @@ export interface AutosavePostRequest {
   title?: string;
   excerpt?: string;
   markdownContent?: string;
+  scheduledPublishAt?: string;
   tags?: string[];
 }
 
@@ -91,6 +96,7 @@ export interface AutosaveSnapshot {
   title: string;
   excerpt: string | null;
   markdownContent: string;
+  scheduledPublishAt: string | null;
   tags: string[];
   savedAt: string;
 }
@@ -102,6 +108,7 @@ export interface RestoreAutosaveResponse {
   title: string;
   excerpt: string | null;
   markdownContent: string;
+  scheduledPublishAt: string | null;
   tags: string[];
   restoredAt: string;
 }

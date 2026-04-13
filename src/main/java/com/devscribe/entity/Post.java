@@ -53,6 +53,9 @@ public class Post {
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
 
+    @Column(name = "scheduled_publish_at")
+    private OffsetDateTime scheduledPublishAt;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "post_tags",

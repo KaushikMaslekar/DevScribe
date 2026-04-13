@@ -43,6 +43,12 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     long countByAuthor_IdAndStatus(Long authorId, PostStatus status);
 
+    Page<Post> findByStatusAndScheduledPublishAtIsNotNullAndScheduledPublishAtLessThanEqualOrderByScheduledPublishAtAsc(
+            PostStatus status,
+            java.time.OffsetDateTime scheduledPublishAt,
+            Pageable pageable
+    );
+
     @Query(value = """
             select distinct p.*
             from posts p
