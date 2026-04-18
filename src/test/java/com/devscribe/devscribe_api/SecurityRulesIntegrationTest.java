@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -54,6 +55,22 @@ class SecurityRulesIntegrationTest {
         mockMvc.perform(post("/series")
                 .contentType("application/json")
                 .content("{\"title\":\"Java Mastery\"}"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void attachingSeriesPostWithoutAuthIsRejected() throws Exception {
+        mockMvc.perform(post("/series/1/posts")
+                .contentType("application/json")
+                .content("{\"postId\":1}"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void reorderingSeriesPostsWithoutAuthIsRejected() throws Exception {
+        mockMvc.perform(put("/series/1/posts/reorder")
+                .contentType("application/json")
+                .content("{\"postIds\":[1,2]}"))
                 .andExpect(status().is4xxClientError());
     }
 }
