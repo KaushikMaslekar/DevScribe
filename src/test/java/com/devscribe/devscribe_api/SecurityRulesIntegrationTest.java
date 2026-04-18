@@ -94,4 +94,10 @@ class SecurityRulesIntegrationTest {
                 .content("{\"postIds\":[1,2]}"))
                 .andExpect(status().is4xxClientError());
     }
+
+    @Test
+    void publicSeriesDetailEndpointIsAccessible() throws Exception {
+        mockMvc.perform(get("/series/public/demo-series"))
+                .andExpect(status().isNotFound());
+    }
 }

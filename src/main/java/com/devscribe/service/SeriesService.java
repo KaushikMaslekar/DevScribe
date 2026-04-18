@@ -22,10 +22,13 @@ import com.devscribe.dto.series.AttachSeriesPostRequest;
 import com.devscribe.dto.series.CreateSeriesRequest;
 import com.devscribe.dto.series.MoveSeriesPostRequest;
 import com.devscribe.dto.series.ReorderSeriesPostsRequest;
+import com.devscribe.dto.series.SeriesDetailResponse;
 import com.devscribe.dto.series.SeriesPostItemResponse;
 import com.devscribe.dto.series.SeriesPostsResponse;
+import com.devscribe.dto.series.SeriesPublicPostItemResponse;
 import com.devscribe.dto.series.SeriesSummaryResponse;
 import com.devscribe.entity.Post;
+import com.devscribe.entity.PostStatus;
 import com.devscribe.entity.Series;
 import com.devscribe.entity.SeriesPost;
 import com.devscribe.entity.User;
@@ -181,6 +184,53 @@ public class SeriesService {
         seriesPostRepository.saveAll(currentSeriesPosts);
 
         return toSeriesPostsResponse(seriesId);
+    }
+
+    @Transactional(readOnly = true)
+    public SeriesDetailResponse getPublicBySlug(@NonNull String slug, String currentPostSlug) {
+        Series series = seriesRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Series not found"));
+
+        List<SeriesPublicPostItemResponse> publishedPosts = seriesPostRepository.findBySeries_IdOrderBySortOrderAsc(series.getId())
+                .stream()
+                .filter(seriesPost -> seriesPost.getPost().getStatus() == PostStatus.PUBLISHED)
+                .map(seriesPost -> new SeriesPublicPostItemResponse(
+                        seriesPost.getPost().getId(),
+                        seriesPost.getPost().getSlug(),
+                        seriesPost.getPost().getTitle(),
+                        seriesPost.getSortOrder()
+                ))
+                .toList();
+
+        String normalizedCurrentPostSlug = normalizeSlug(currentPostSlug);
+        int currentIndex = -1;
+        if (normalizedCurrentPostSlug != null) {
+            for (int i = 0; i < publishedPosts.size(); i += 1) {
+                if (publishedPosts.get(i).postSlug().equals(normalizedCurrentPostSlug)) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+        }
+
+        String resolvedCurrentPostSlug = currentIndex >= 0 ? publishedPosts.get(currentIndex).postSlug() : null;
+        String previousPostSlug = currentIndex > 0 ? publishedPosts.get(currentIndex - 1).postSlug() : null;
+        String nextPostSlug = currentIndex >= 0 && currentIndex < publishedPosts.size() - 1
+                ? publishedPosts.get(currentIndex + 1).postSlug()
+                : null;
+
+        return new SeriesDetailResponse(
+                series.getId(),
+                series.getSlug(),
+                series.getTitle(),
+                series.getDescription(),
+                series.getAuthor().getUsername(),
+                publishedPosts.size(),
+                publishedPosts,
+                resolvedCurrentPostSlug,
+                previousPostSlug,
+                nextPostSlug
+        );
     }
 
     private void moveWithinSeries(Long seriesId, SeriesPost seriesPost, Integer requestedSortOrder) {
@@ -346,6 +396,19 @@ public class SeriesService {
         }
 
         String trimmed = description.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        return trimmed;
+    }
+
+    private String normalizeSlug(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
         if (trimmed.isEmpty()) {
             return null;
         }

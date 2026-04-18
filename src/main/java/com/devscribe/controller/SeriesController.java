@@ -12,12 +12,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.devscribe.dto.series.AttachSeriesPostRequest;
 import com.devscribe.dto.series.CreateSeriesRequest;
 import com.devscribe.dto.series.MoveSeriesPostRequest;
 import com.devscribe.dto.series.ReorderSeriesPostsRequest;
+import com.devscribe.dto.series.SeriesDetailResponse;
 import com.devscribe.dto.series.SeriesPostsResponse;
 import com.devscribe.dto.series.SeriesSummaryResponse;
 import com.devscribe.service.SeriesService;
@@ -40,6 +42,14 @@ public class SeriesController {
     @GetMapping
     public ResponseEntity<List<SeriesSummaryResponse>> listMine() {
         return ResponseEntity.ok(seriesService.listMine());
+    }
+
+    @GetMapping("/public/{slug}")
+    public ResponseEntity<SeriesDetailResponse> getPublicBySlug(
+            @PathVariable @NonNull String slug,
+            @RequestParam(required = false) String currentPostSlug
+    ) {
+        return ResponseEntity.ok(seriesService.getPublicBySlug(slug, currentPostSlug));
     }
 
     @GetMapping("/{seriesId}/posts")

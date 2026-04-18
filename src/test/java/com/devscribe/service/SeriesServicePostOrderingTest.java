@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.devscribe.dto.series.AttachSeriesPostRequest;
 import com.devscribe.dto.series.MoveSeriesPostRequest;
 import com.devscribe.dto.series.ReorderSeriesPostsRequest;
+import com.devscribe.dto.series.SeriesDetailResponse;
 import com.devscribe.dto.series.SeriesPostsResponse;
 import com.devscribe.dto.series.SeriesSummaryResponse;
 import com.devscribe.entity.Post;
@@ -205,5 +206,31 @@ class SeriesServicePostOrderingTest {
         );
 
         assertEquals(400, exception.getStatusCode().value());
+    }
+
+    @Test
+    void publicSeriesDetailResolvesPreviousAndNextSlugs() {
+        User owner = User.builder().id(1L).email("owner@devscribe.com").username("owner").passwordHash("x").build();
+        Series series = Series.builder().id(11L).author(owner).slug("spring-series").title("Spring").build();
+
+        Post firstPost = Post.builder().id(101L).author(owner).slug("intro").title("Intro").status(PostStatus.PUBLISHED).build();
+        Post secondPost = Post.builder().id(102L).author(owner).slug("core").title("Core").status(PostStatus.PUBLISHED).build();
+        Post thirdPost = Post.builder().id(103L).author(owner).slug("advanced").title("Advanced").status(PostStatus.PUBLISHED).build();
+
+        List<SeriesPost> orderedPosts = List.of(
+                SeriesPost.builder().series(series).post(firstPost).sortOrder(1).build(),
+                SeriesPost.builder().series(series).post(secondPost).sortOrder(2).build(),
+                SeriesPost.builder().series(series).post(thirdPost).sortOrder(3).build()
+        );
+
+        when(seriesRepository.findBySlug("spring-series")).thenReturn(Optional.of(series));
+        when(seriesPostRepository.findBySeries_IdOrderBySortOrderAsc(11L)).thenReturn(orderedPosts);
+
+        SeriesDetailResponse response = seriesService.getPublicBySlug("spring-series", "core");
+
+        assertEquals("core", response.currentPostSlug());
+        assertEquals("intro", response.previousPostSlug());
+        assertEquals("advanced", response.nextPostSlug());
+        assertEquals(3, response.posts().size());
     }
 }
