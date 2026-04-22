@@ -23,6 +23,7 @@ import { followUser, unfollowUser } from "@/lib/user-api";
 import { renderMarkdown } from "@/lib/markdown";
 import { getAccessToken } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
+import { CommentSection } from "@/components/comment-section";
 
 export default function PostDetailPage() {
   const params = useParams<{ slug: string }>();
@@ -282,6 +283,9 @@ export default function PostDetailPage() {
               </aside>
             ) : null}
           </div>
+
+          {/* Comments Section */}
+          <CommentSection postId={postQuery.data.id} />
         </article>
       ) : null}
     </main>
