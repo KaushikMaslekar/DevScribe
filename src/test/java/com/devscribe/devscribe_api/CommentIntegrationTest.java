@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -48,8 +49,6 @@ public class CommentIntegrationTest {
     private User author;
     private User commenter;
     private Post post;
-    private String authorToken;
-    private String commenterToken;
 
     @BeforeEach
     void setUp() {
@@ -86,11 +85,11 @@ public class CommentIntegrationTest {
                 .build());
 
         // Generate tokens (these would normally come from auth flow)
-        authorToken = "Bearer dummy-token-author";
-        commenterToken = "Bearer dummy-token-commenter";
+        // Note: With @WithMockUser, we don't need bearer tokens in tests
     }
 
     @Test
+    @WithMockUser(username = "commenter@test.com")
     void testCreateComment_Success() throws Exception {
         CreateCommentRequest request = new CreateCommentRequest(
                 "This is a test comment",
@@ -98,7 +97,6 @@ public class CommentIntegrationTest {
         );
 
         mockMvc.perform(post("/posts/{postId}/comments", post.getId())
-                .header("Authorization", commenterToken)
                 .contentType(APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -110,6 +108,7 @@ public class CommentIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "commenter@test.com")
     void testCreateCommentReply_Success() throws Exception {
         // Create parent comment
         Comment parent = commentRepository.save(Comment.builder()
@@ -125,7 +124,6 @@ public class CommentIntegrationTest {
         );
 
         mockMvc.perform(post("/posts/{postId}/comments", post.getId())
-                .header("Authorization", commenterToken)
                 .contentType(APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -134,11 +132,11 @@ public class CommentIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "commenter@test.com")
     void testCreateComment_BlankContent_Fails() throws Exception {
         CreateCommentRequest request = new CreateCommentRequest("", null);
 
         mockMvc.perform(post("/posts/{postId}/comments", post.getId())
-                .header("Authorization", commenterToken)
                 .contentType(APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -218,6 +216,7 @@ public class CommentIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "commenter@test.com")
     void testDeleteComment_AsAuthor_Success() throws Exception {
         Comment comment = commentRepository.save(Comment.builder()
                 .post(post)
@@ -226,8 +225,7 @@ public class CommentIntegrationTest {
                 .status(CommentStatus.ACTIVE)
                 .build());
 
-        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId())
-                .header("Authorization", commenterToken))
+        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId()))
                 .andExpect(status().isNoContent());
 
         // Verify soft delete
@@ -237,6 +235,7 @@ public class CommentIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "author@test.com")
     void testDeleteComment_AsPostOwner_Success() throws Exception {
         Comment comment = commentRepository.save(Comment.builder()
                 .post(post)
@@ -246,12 +245,12 @@ public class CommentIntegrationTest {
                 .build());
 
         // Post owner (author) deletes someone else's comment
-        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId())
-                .header("Authorization", authorToken))
+        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId()))
                 .andExpect(status().isNoContent());
     }
 
     @Test
+    @WithMockUser(username = "other@test.com")
     void testDeleteComment_Unauthorized_Fails() throws Exception {
         User otherUser = userRepository.save(User.builder()
                 .username("other")
@@ -268,14 +267,12 @@ public class CommentIntegrationTest {
                 .status(CommentStatus.ACTIVE)
                 .build());
 
-        String otherToken = "Bearer dummy-token-other";
-
-        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId())
-                .header("Authorization", otherToken))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(delete("/posts/{postId}/comments/{commentId}", post.getId(), comment.getId()))
+                .andExpect(status().isForbidden());
     }
 
     @Test
+    @WithMockUser(username = "author@test.com")
     void testFlagComment_Success() throws Exception {
         Comment comment = commentRepository.save(Comment.builder()
                 .post(post)

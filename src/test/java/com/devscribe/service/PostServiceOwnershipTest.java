@@ -22,8 +22,10 @@ import com.devscribe.entity.Post;
 import com.devscribe.entity.PostStatus;
 import com.devscribe.entity.User;
 import com.devscribe.realtime.PostRealtimePublisher;
+import com.devscribe.repository.PostBookmarkRepository;
 import com.devscribe.repository.PostLikeRepository;
 import com.devscribe.repository.PostRepository;
+import com.devscribe.repository.UserFollowRepository;
 import com.devscribe.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,7 +44,16 @@ class PostServiceOwnershipTest {
     private PostLikeRepository postLikeRepository;
 
     @Mock
+    private PostBookmarkRepository postBookmarkRepository;
+
+    @Mock
     private PostRealtimePublisher postRealtimePublisher;
+
+    @Mock
+    private AuditLogService auditLogService;
+
+    @Mock
+    private UserFollowRepository userFollowRepository;
 
     @InjectMocks
     private PostService postService;
@@ -80,6 +91,9 @@ class PostServiceOwnershipTest {
         when(postRepository.findById(100L)).thenReturn(Optional.of(post));
         when(userRepository.findByEmail("owner@devscribe.com")).thenReturn(Optional.of(owner));
         when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(postBookmarkRepository.existsByUser_IdAndPost_Id(any(), any())).thenReturn(false);
+        when(postLikeRepository.existsByPost_IdAndUser_Id(any(), any())).thenReturn(false);
+        when(userFollowRepository.existsByFollower_IdAndFollowed_Id(any(), any())).thenReturn(false);
 
         postService.publish(100L);
 

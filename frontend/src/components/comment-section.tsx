@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getComments, getCommentCount } from "@/lib/comment-api";
 import { CommentItem } from "./comment-item";
 import { CommentComposer } from "./comment-composer";

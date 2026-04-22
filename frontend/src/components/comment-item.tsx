@@ -7,6 +7,7 @@ import { CommentResponse } from "@/types/comment";
 import { formatDistanceToNow } from "date-fns";
 import { Trash2, Flag, Reply } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 interface CommentItemProps {
   comment: CommentResponse;
@@ -55,12 +56,14 @@ export function CommentItem({
       className={`flex gap-3 rounded-lg border bg-card/50 p-4 ${depth > 0 ? "ml-6" : ""}`}
     >
       {/* Avatar */}
-      <div className="h-8 w-8 flex-shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
+      <div className="h-8 w-8 flex-shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold overflow-hidden">
         {comment.author.avatarUrl ? (
-          <img
+          <Image
             src={comment.author.avatarUrl}
             alt={comment.author.displayName}
-            className="h-full w-full rounded-full object-cover"
+            width={32}
+            height={32}
+            className="h-full w-full object-cover"
           />
         ) : (
           comment.author.displayName[0]?.toUpperCase() || "?"
